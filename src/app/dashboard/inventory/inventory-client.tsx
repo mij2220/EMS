@@ -1,0 +1,367 @@
+"use client";
+
+import { useState, useMemo, useRef } from "react";
+import { useRouter } from "next/navigation";
+import AppShell from "@/components/app-shell";
+
+type Product = {
+  id: string;
+  handle: string;
+  title: string;
+  status: string;
+  imageUrl: string | null;
+  variantCount: number;
+  totalOnHand: number;
+  minPrice: number | null;
+  maxPrice: number | null;
+  minCost: number | null;
+  maxCost: number | null;
+  hasMissingSku: boolean;
+  locationNames: string[];
+};
+
+function fmtRs(n: number | null) {
+  if (n == null) return "—";
+  return "Rs " + n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
+function priceRange(min: number | null, max: number | null) {
+  if (min == null) return "—";
+  if (min === max) return fmtRs(min);
+  return `${fmtRs(min)} – ${fmtRs(max)}`;
+}
+
+function statusOf(p: Product): { label: string; cls: string } {
+  if (p.status === "draft") return { label: "Draft", cls: "mockup-tag-neutral" };
+  if (p.totalOnHand === 0) return { label: "Out of Stock", cls: "mockup-tag-bad" };
+  if (p.totalOnHand < 50) return { label: "Low Stock", cls: "mockup-tag-bad" };
+  return { label: "In Stock", cls: "mockup-tag-good" };
+}
+
+export default function InventoryClient({
+  initialProducts,
+  locations,
+  tenantName,
+  userInitial,
+}: {
+  initialProducts: Product[];
+  locations: string[];
+  tenantName: string;
+  userInitial: string;
+}) {
+  const router = useRouter();
+  const [products, setProducts] = useState(initialProducts);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const totalVariants = products.reduce((s, p) => s + p.variantCount, 0);
+  const missingSkuCount = products.filter((p) => p.hasMissingSku).length;
+  const withPhotoCount = products.filter((p) => p.imageUrl).length;
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return products.filter((p) => {
+      if (statusFilter && statusOf(p).label !== statusFilter) return false;
+      if (locationFilter && !p.locationNames.includes(locationFilter)) return false;
+      if (!q) return true;
+      return p.title.toLowerCase().includes(q) || p.handle.toLowerCase().includes(q);
+    });
+  }, [products, search, statusFilter, locationFilter]);
+
+  async function handleAddProduct(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setSaving(true);
+    const form = new FormData(e.currentTarget);
+    try {
+      const res = await fetch("/api/inventory/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: form.get("title"),
+          option1Value: form.get("option1Value"),
+          option2Value: form.get("option2Value"),
+          costPrice: form.get("costPrice") || null,
+          salePrice: form.get("salePrice") || null,
+          onHand: form.get("onHand") || 0,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Something went wrong.");
+        return;
+      }
+      setShowAddModal(false);
+      router.refresh();
+      setProducts((prev) => [
+        ...prev,
+        {
+          id: data.productId,
+          handle: "",
+          title: String(form.get("title")),
+          status: "active",
+          imageUrl: null,
+          variantCount: 1,
+          totalOnHand: Number(form.get("onHand") || 0),
+          minPrice: form.get("salePrice") ? Number(form.get("salePrice")) : null,
+          maxPrice: form.get("salePrice") ? Number(form.get("salePrice")) : null,
+          minCost: form.get("costPrice") ? Number(form.get("costPrice")) : null,
+          maxCost: form.get("costPrice") ? Number(form.get("costPrice")) : null,
+          hasMissingSku: true,
+          locationNames: [],
+        },
+      ]);
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportMsg("Uploading…");
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await fetch("/api/inventory/import", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) {
+        setImportMsg(`Import failed: ${data.error ?? "unknown error"}`);
+        return;
+      }
+      setImportMsg(`Imported ${data.updated} variant(s), created ${data.created} new product(s).`);
+      router.refresh();
+      window.location.reload();
+    } catch {
+      setImportMsg("Could not reach the server.");
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  return (
+    <AppShell
+      active="inventory"
+      title="Inventory"
+      desc="Synced from Shopify · cost, price and profit managed in EMS"
+      tenantName={tenantName}
+      userInitial={userInitial}
+    >
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+        <div className="flex gap-2 flex-wrap">
+          <input
+            type="text"
+            placeholder="Search product or handle…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-64 rounded-lg border px-3 py-2 text-sm"
+            style={{ borderColor: "var(--line)" }}
+          />
+          <select
+            value={locationFilter}
+            onChange={(e) => setLocationFilter(e.target.value)}
+            className="rounded-lg border px-3 py-2 text-sm"
+            style={{ borderColor: "var(--line)" }}
+          >
+            <option value="">All locations</option>
+            {locations.map((loc) => (
+              <option key={loc} value={loc}>
+                {loc}
+              </option>
+            ))}
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="rounded-lg border px-3 py-2 text-sm"
+            style={{ borderColor: "var(--line)" }}
+          >
+            <option value="">All status</option>
+            <option value="In Stock">In Stock</option>
+            <option value="Low Stock">Low Stock</option>
+            <option value="Out of Stock">Out of Stock</option>
+            <option value="Draft">Draft</option>
+          </select>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <input ref={fileInputRef} type="file" accept=".xlsx" className="hidden" onChange={handleImportFile} />
+          <button onClick={() => fileInputRef.current?.click()} className="mockup-btn mockup-btn-ghost">
+            ⇅ Import Excel
+          </button>
+          <a href="/api/inventory/export" className="mockup-btn mockup-btn-ghost inline-block">
+            Export
+          </a>
+          <button
+            disabled
+            title="Requires a connected Shopify store (Admin → API Settings) — not configured in this demo."
+            className="mockup-btn mockup-btn-ghost opacity-50 cursor-not-allowed"
+          >
+            ⟳ Sync with Shopify
+          </button>
+          <button
+            disabled
+            title="Requires a connected Shopify store (Admin → API Settings) — not configured in this demo."
+            className="mockup-btn mockup-btn-ghost opacity-50 cursor-not-allowed"
+          >
+            Push Updates to Shopify
+          </button>
+          <button onClick={() => setShowAddModal(true)} className="mockup-btn mockup-btn-primary">
+            + Add Product
+          </button>
+        </div>
+      </div>
+
+      {importMsg && (
+        <div className="text-sm rounded-lg px-3 py-2 mb-3" style={{ background: "var(--good-bg)", color: "var(--good)" }}>
+          {importMsg}
+        </div>
+      )}
+
+      <div className="text-sm mb-4" style={{ color: "var(--muted)" }}>
+        Showing all {products.length} products ({totalVariants} total variants). <b>SKU is missing on {missingSkuCount} of {products.length} products</b> —
+        true of your actual Shopify export. Photos: {withPhotoCount}/{products.length} fetched live from aimexa.store, the rest show a placeholder.
+      </div>
+
+      <div className="mockup-card !p-0 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[900px]">
+            <thead style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
+              <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
+                <th className="px-4 py-3">Product</th>
+                <th className="px-4 py-3">Variant</th>
+                <th className="px-4 py-3">SKU</th>
+                <th className="px-4 py-3">Cost</th>
+                <th className="px-4 py-3">Sale Price</th>
+                <th className="px-4 py-3">On Hand</th>
+                <th className="px-4 py-3">Profit / unit</th>
+                <th className="px-4 py-3">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((p) => {
+                const st = statusOf(p);
+                const profit =
+                  p.minPrice != null && p.minCost != null ? p.minPrice - p.minCost : null;
+                return (
+                  <tr
+                    key={p.id}
+                    onClick={() => router.push(`/dashboard/inventory/${p.id}`)}
+                    className="cursor-pointer hover:bg-slate-50"
+                    style={{ borderTop: "1px solid var(--line)" }}
+                  >
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        {p.imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={p.imageUrl}
+                            alt=""
+                            loading="lazy"
+                            className="w-9 h-9 rounded-md object-cover border flex-shrink-0"
+                            style={{ borderColor: "var(--line)" }}
+                          />
+                        ) : (
+                          <span
+                            className="w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0 text-sm border"
+                            style={{ background: "#EDEBE4", borderColor: "var(--line)" }}
+                          >
+                            👕
+                          </span>
+                        )}
+                        <span className="font-medium">{p.title}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3" style={{ color: "var(--muted)" }}>
+                      {p.variantCount} variant{p.variantCount !== 1 ? "s" : ""}
+                    </td>
+                    <td className="px-4 py-3" style={{ color: "var(--muted)" }}>
+                      {p.hasMissingSku ? "— missing —" : "assigned"}
+                    </td>
+                    <td className="px-4 py-3">{priceRange(p.minCost, p.maxCost)}</td>
+                    <td className="px-4 py-3">{priceRange(p.minPrice, p.maxPrice)}</td>
+                    <td className="px-4 py-3 font-medium">{p.totalOnHand}</td>
+                    <td className="px-4 py-3" style={{ color: profit != null ? "var(--good)" : "var(--muted)" }}>
+                      {fmtRs(profit)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={"mockup-tag " + st.cls}>{st.label}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center" style={{ color: "var(--muted)" }}>
+                    No products match your filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <h2 className="text-lg font-bold mb-1">Add Product</h2>
+            <p className="text-sm mb-4" style={{ color: "var(--muted)" }}>
+              Creates the product with its first variant.
+            </p>
+            <form onSubmit={handleAddProduct} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold mb-1">Title</label>
+                <input name="title" required className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold mb-1">Color</label>
+                  <input name="option1Value" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold mb-1">Size</label>
+                  <input name="option2Value" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold mb-1">Cost (Rs)</label>
+                  <input name="costPrice" type="number" step="0.01" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold mb-1">Price (Rs)</label>
+                  <input name="salePrice" type="number" step="0.01" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold mb-1">On Hand</label>
+                  <input name="onHand" type="number" defaultValue={0} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
+                </div>
+              </div>
+              {error && (
+                <div className="text-sm rounded-lg px-3 py-2" style={{ background: "var(--bad-bg)", color: "var(--bad)" }}>
+                  {error}
+                </div>
+              )}
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setShowAddModal(false)} className="mockup-btn mockup-btn-ghost">
+                  Cancel
+                </button>
+                <button type="submit" disabled={saving} className="mockup-btn mockup-btn-primary disabled:opacity-50">
+                  {saving ? "Saving…" : "Add Product"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </AppShell>
+  );
+}
