@@ -31,8 +31,14 @@ don't reconstruct from memory or assumption.
   byte-for-byte identical, non-image/oversized files rejected, route requires auth. Needed a real
   schema migration — see `db/migrations/001_voucher_photo_and_units.sql` — now tracked properly
   via `schema_migrations` and applied automatically by `apply-migrations.sh` rather than a manual
-  one-off step. Still needs to actually be run against the live Railway database at least once
-  (via `./scripts/deploy-railway.sh` answering yes to the migration prompt, or manually).
+  one-off step. Applied to Railway's live database and confirmed working there too, not just local.
+- Accounts ledger rows are now clickable → real View/Edit/Delete on any voucher
+  (`/api/accounts/vouchers/[id]`, GET/PATCH/DELETE). Edit supports replacing the photo — verified
+  the new upload genuinely overwrites the old one, not just added alongside it. Delete is FK-safe:
+  vouchers tied to a courier dispatch/remittance record (referenced by `courier_ledger_entries` or
+  `courier_remittance_batches`) are refused with a clear 409 explaining why, rather than corrupting
+  the courier ledger's running balance — verified this refusal doesn't leave anything in a partial
+  state (the referenced ledger entry is untouched after a blocked delete attempt).
 
 **Import Excel now handles two different file formats**, detected by column name, not by asking
 the user which one they have:
@@ -185,6 +191,7 @@ browser URL while logged into `admin.shopify.com` directly, rather than guessing
 **Next step if picking this up fresh:** ask the user to look at their Shopify app's API
 credentials page and describe exactly what fields/labels are there (or send a screenshot with the
 actual secret values still masked/hidden), to confirm which credential is the right one before
-trying again. A leaked token from this debugging session (`[REDACTED — see chat history if needed]`)
-should be treated as compromised — the user was told to regenerate it, unconfirmed whether they
-have yet.
+trying again. A token was leaked in the chat during this debugging session and should be treated
+as compromised — the user was told to regenerate it in Shopify Admin; unconfirmed whether they
+have yet. (Deliberately not repeating the leaked value here — GitHub's push protection correctly
+flagged an earlier version of this file for containing it literally; don't reintroduce that.)

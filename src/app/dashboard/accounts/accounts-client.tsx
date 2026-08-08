@@ -36,6 +36,7 @@ export default function AccountsClient({ tenantName, userInitial }: { tenantName
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [modal, setModal] = useState<null | "expense" | "salary" | "vendor" | "voucher">(null);
+  const [selectedVoucherId, setSelectedVoucherId] = useState<string | null>(null);
 
   const loadAll = useCallback(async () => {
     const [k, v, a, ve, em] = await Promise.all([
@@ -110,7 +111,7 @@ export default function AccountsClient({ tenantName, userInitial }: { tenantName
             </thead>
             <tbody>
               {vouchers.map((v) => (
-                <tr key={v.id} style={{ borderTop: "1px solid var(--line)" }}>
+                <tr key={v.id} onClick={() => setSelectedVoucherId(v.id)} className="cursor-pointer hover:bg-slate-50" style={{ borderTop: "1px solid var(--line)" }}>
                   <td className="px-4 py-3">{new Date(v.voucherDate).toLocaleDateString()}</td>
                   <td className="px-4 py-3">{v.voucherType}</td>
                   <td className="px-4 py-3">{v.reference}</td>
@@ -155,6 +156,9 @@ export default function AccountsClient({ tenantName, userInitial }: { tenantName
       {modal === "salary" && <SalaryModal employees={employees} onClose={() => setModal(null)} onSaved={loadAll} />}
       {modal === "vendor" && <VendorPurchaseModal vendors={vendors} onClose={() => setModal(null)} onSaved={loadAll} />}
       {modal === "voucher" && <NewVoucherModal accounts={accounts} onClose={() => setModal(null)} onSaved={loadAll} />}
+      {selectedVoucherId && (
+        <VoucherDetailModal voucherId={selectedVoucherId} onClose={() => setSelectedVoucherId(null)} onChanged={loadAll} />
+      )}
     </AppShell>
   );
 }
@@ -460,5 +464,196 @@ function NewVoucherModal({ accounts, onClose, onSaved }: { accounts: Account[]; 
         </div>
       </form>
     </ModalShell>
+  );
+}
+
+type VoucherDetail = {
+  id: string;
+  voucherNumber: string;
+  voucherType: string;
+  voucherDate: string;
+  amount: number;
+  reference: string | null;
+  vendorVoucherNumber: string | null;
+  unitType: string | null;
+  totalUnits: number | null;
+  createdAt: string;
+  debitAccountName: string;
+  creditAccountName: string;
+  enteredByName: string;
+  hasPhoto: boolean;
+};
+
+function VoucherDetailModal({ voucherId, onClose, onChanged }: { voucherId: string; onClose: () => void; onChanged: () => void }) {
+  const [voucher, setVoucher] = useState<VoucherDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    fetch(`/api/accounts/vouchers/${voucherId}`)
+      .then((r) => r.json())
+      .then((d) => {
+        setVoucher(d.voucher ?? null);
+        setLoading(false);
+      });
+  }, [voucherId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function handleSave(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setSaving(true);
+    const formData = new FormData(e.currentTarget);
+    try {
+      const res = await fetch(`/api/accounts/vouchers/${voucherId}`, { method: "PATCH", body: formData });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Something went wrong.");
+        return;
+      }
+      setEditing(false);
+      load();
+      onChanged();
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirm("Delete this voucher? This cannot be undone.")) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/accounts/vouchers/${voucherId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Something went wrong.");
+        return;
+      }
+      onChanged();
+      onClose();
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    setPhotoPreview(file ? URL.createObjectURL(file) : null);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={onClose}>
+      <div className="bg-white rounded-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        {loading && <div className="text-sm text-center py-8" style={{ color: "var(--muted)" }}>Loading…</div>}
+
+        {!loading && voucher && !editing && (
+          <>
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-bold">{voucher.voucherNumber}</h2>
+                <span className="mockup-tag mockup-tag-neutral">{voucher.voucherType}</span>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold">{fmtRs(voucher.amount)}</div>
+                <div className="text-xs" style={{ color: "var(--muted)" }}>{new Date(voucher.voucherDate).toLocaleDateString()}</div>
+              </div>
+            </div>
+            <dl className="text-sm space-y-2 mb-4">
+              <div className="flex justify-between"><dt style={{ color: "var(--muted)" }}>Reference</dt><dd>{voucher.reference ?? "—"}</dd></div>
+              {voucher.vendorVoucherNumber && (
+                <div className="flex justify-between"><dt style={{ color: "var(--muted)" }}>Vendor Voucher #</dt><dd>{voucher.vendorVoucherNumber}</dd></div>
+              )}
+              {voucher.totalUnits != null && (
+                <div className="flex justify-between"><dt style={{ color: "var(--muted)" }}>Units</dt><dd>{voucher.totalUnits} {voucher.unitType ?? ""}</dd></div>
+              )}
+              <div className="flex justify-between"><dt style={{ color: "var(--muted)" }}>Debit</dt><dd>{voucher.debitAccountName}</dd></div>
+              <div className="flex justify-between"><dt style={{ color: "var(--muted)" }}>Credit</dt><dd>{voucher.creditAccountName}</dd></div>
+              <div className="flex justify-between"><dt style={{ color: "var(--muted)" }}>Entered by</dt><dd>{voucher.enteredByName}</dd></div>
+            </dl>
+            {voucher.hasPhoto && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={`/api/accounts/vouchers/${voucher.id}/photo`}
+                alt="Voucher"
+                className="w-full rounded-lg border mb-4"
+                style={{ borderColor: "var(--line)" }}
+              />
+            )}
+            {error && <div className="text-sm rounded-lg px-3 py-2 mb-3" style={{ background: "var(--bad-bg)", color: "var(--bad)" }}>{error}</div>}
+            <div className="flex justify-between gap-2 pt-2">
+              <button onClick={handleDelete} disabled={deleting} className="mockup-btn disabled:opacity-50" style={{ background: "var(--bad-bg)", color: "var(--bad)" }}>
+                {deleting ? "Deleting…" : "Delete"}
+              </button>
+              <div className="flex gap-2">
+                <button onClick={onClose} className="mockup-btn mockup-btn-ghost">Close</button>
+                <button onClick={() => setEditing(true)} className="mockup-btn mockup-btn-primary">Edit</button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {!loading && voucher && editing && (
+          <>
+            <h2 className="text-lg font-bold mb-4">Edit {voucher.voucherNumber}</h2>
+            <form onSubmit={handleSave} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold mb-1">Date</label>
+                  <input name="voucherDate" type="date" defaultValue={voucher.voucherDate.slice(0, 10)} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold mb-1">Vendor Voucher #</label>
+                  <input name="vendorVoucherNumber" defaultValue={voucher.vendorVoucherNumber ?? ""} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">Reference</label>
+                <input name="reference" defaultValue={voucher.reference ?? ""} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold mb-1">Unit Type</label>
+                  <input name="unitType" defaultValue={voucher.unitType ?? ""} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold mb-1">Total Units</label>
+                  <input name="totalUnits" type="number" step="0.01" defaultValue={voucher.totalUnits ?? ""} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">Amount (Rs)</label>
+                <input name="amount" type="number" step="0.01" defaultValue={voucher.amount} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">Replace Photo</label>
+                <input name="photo" type="file" accept="image/*" onChange={handlePhotoChange} className="w-full text-sm" />
+                {photoPreview && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={photoPreview} alt="New photo preview" className="mt-2 rounded-lg border max-h-40 object-contain" style={{ borderColor: "var(--line)" }} />
+                )}
+              </div>
+              {error && <div className="text-sm rounded-lg px-3 py-2" style={{ background: "var(--bad-bg)", color: "var(--bad)" }}>{error}</div>}
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setEditing(false)} className="mockup-btn mockup-btn-ghost">Cancel</button>
+                <button type="submit" disabled={saving} className="mockup-btn mockup-btn-primary disabled:opacity-50">{saving ? "Saving…" : "Save Changes"}</button>
+              </div>
+            </form>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
