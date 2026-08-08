@@ -108,6 +108,11 @@ if [ "$RESET" = true ] || [ "$TABLE_COUNT" -eq 0 ]; then
   if [ "$TABLE_COUNT" -eq 0 ]; then
     echo "== Applying schema =="
     psql "$DATABASE_URL" -f db/schema.sql
+    if [ -d db/migrations ] && [ -n "$(ls -A db/migrations 2>/dev/null)" ]; then
+      for file in db/migrations/*.sql; do
+        psql "$DATABASE_URL" -c "insert into schema_migrations (filename) values ('$(basename "$file")') on conflict do nothing;" > /dev/null
+      done
+    fi
   fi
 
   echo "== Installing dependencies =="
@@ -118,6 +123,9 @@ if [ "$RESET" = true ] || [ "$TABLE_COUNT" -eq 0 ]; then
 else
   echo "== Installing dependencies =="
   npm install
+  echo "== Applying any pending migrations =="
+  chmod +x scripts/apply-migrations.sh
+  ./scripts/apply-migrations.sh "$DATABASE_URL"
   echo "✓ Database already has data — skipping seed (use --reset to wipe and reload)"
 fi
 

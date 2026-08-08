@@ -11,7 +11,10 @@
     "db:generate-types": "node --env-file=.env node_modules/.bin/kysely-codegen --out-file src/db/types.ts --camel-case",
     "setup:local": "bash scripts/setup-local.sh",
     "setup:local:reset": "bash scripts/setup-local.sh --reset",
-    "deploy:railway": "bash scripts/deploy-railway.sh"
+    "deploy:railway": "bash scripts/deploy-railway.sh",
+    "deploy:local": "bash scripts/deploy-local.sh",
+    "deploy:update": "bash scripts/deploy-update.sh",
+    "migrate": "bash scripts/apply-migrations.sh"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

@@ -58,6 +58,8 @@ export default function InventoryClient({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const totalVariants = products.reduce((s, p) => s + p.variantCount, 0);
@@ -121,6 +123,49 @@ export default function InventoryClient({
       setError("Could not reach the server.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => (prev.size === filtered.length ? new Set() : new Set(filtered.map((p) => p.id))));
+  }
+
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Delete ${selectedIds.size} selected product(s)? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/inventory/products/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [...selectedIds] }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error ?? "Something went wrong.");
+        return;
+      }
+      let msg = `Deleted ${data.deleted} product(s).`;
+      if (data.blocked?.length) {
+        msg += ` Could not delete (has order/stock-adjustment history, so it's protected instead of removed): ${data.blocked.join(", ")}.`;
+      }
+      alert(msg);
+      setSelectedIds(new Set());
+      router.refresh();
+      window.location.reload();
+    } catch {
+      alert("Could not reach the server.");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -219,6 +264,30 @@ export default function InventoryClient({
         </div>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div
+          className="flex items-center justify-between mb-3 px-4 py-2 rounded-lg"
+          style={{ background: "var(--bad-bg)" }}
+        >
+          <span className="text-sm font-semibold" style={{ color: "var(--bad)" }}>
+            {selectedIds.size} product{selectedIds.size !== 1 ? "s" : ""} selected
+          </span>
+          <div className="flex gap-2">
+            <button onClick={() => setSelectedIds(new Set())} className="mockup-btn mockup-btn-ghost">
+              Clear
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              disabled={deleting}
+              className="mockup-btn"
+              style={{ background: "var(--bad)", color: "#fff" }}
+            >
+              {deleting ? "Deleting…" : `Delete Selected (${selectedIds.size})`}
+            </button>
+          </div>
+        </div>
+      )}
+
       {importMsg && (
         <div className="text-sm rounded-lg px-3 py-2 mb-3" style={{ background: "var(--good-bg)", color: "var(--good)" }}>
           {importMsg}
@@ -235,6 +304,13 @@ export default function InventoryClient({
           <table className="w-full text-sm min-w-[900px]">
             <thead style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
               <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
+                <th className="px-4 py-3 w-8">
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                    onChange={toggleSelectAll}
+                  />
+                </th>
                 <th className="px-4 py-3">Product</th>
                 <th className="px-4 py-3">Variant</th>
                 <th className="px-4 py-3">SKU</th>
@@ -257,6 +333,9 @@ export default function InventoryClient({
                     className="cursor-pointer hover:bg-slate-50"
                     style={{ borderTop: "1px solid var(--line)" }}
                   >
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} />
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         {p.imageUrl ? (
@@ -299,7 +378,7 @@ export default function InventoryClient({
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center" style={{ color: "var(--muted)" }}>
+                  <td colSpan={9} className="px-4 py-8 text-center" style={{ color: "var(--muted)" }}>
                     No products match your filters.
                   </td>
                 </tr>

@@ -11,6 +11,7 @@ type Order = {
   paymentType: string;
   source: string;
   trackingNumber: string | null;
+  placedAt: string;
   customerName: string;
   city: string;
   courierName: string | null;
@@ -23,6 +24,10 @@ function fmtRs(n: number) {
   return "Rs " + Math.round(n).toLocaleString("en-US");
 }
 
+function fmtDate(d: string) {
+  return new Date(d).toLocaleDateString("en-US", { day: "numeric", month: "short" });
+}
+
 const STATUS_TAG: Record<string, string> = {
   pending: "mockup-tag-neutral",
   packed: "mockup-tag-neutral",
@@ -32,12 +37,21 @@ const STATUS_TAG: Record<string, string> = {
   returned: "mockup-tag-bad",
 };
 
+const SOURCE_LABEL: Record<string, string> = {
+  manual_pdf: "Manual PDF",
+  shopify_sync: "Shopify Sync",
+  woocommerce: "WooCommerce",
+};
+
 export default function SalesClient({ tenantName, userInitial }: { tenantName: string; userInitial: string }) {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [courierFilter, setCourierFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     fetch("/api/sales/orders")
@@ -48,10 +62,14 @@ export default function SalesClient({ tenantName, userInitial }: { tenantName: s
       });
   }, []);
 
+  const couriers = useMemo(() => [...new Set(orders.map((o) => o.courierName).filter((c): c is string => !!c))].sort(), [orders]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return orders.filter((o) => {
       if (statusFilter && o.status !== statusFilter) return false;
+      if (courierFilter && o.courierName !== courierFilter) return false;
+      if (sourceFilter && o.source !== sourceFilter) return false;
       if (!q) return true;
       return (
         o.orderNumber.toLowerCase().includes(q) ||
@@ -59,7 +77,7 @@ export default function SalesClient({ tenantName, userInitial }: { tenantName: s
         o.city.toLowerCase().includes(q)
       );
     });
-  }, [orders, search, statusFilter]);
+  }, [orders, search, statusFilter, courierFilter, sourceFilter]);
 
   return (
     <AppShell
@@ -93,30 +111,72 @@ export default function SalesClient({ tenantName, userInitial }: { tenantName: s
             <option value="delivered">Delivered</option>
             <option value="returned">Returned</option>
           </select>
+          <select
+            value={courierFilter}
+            onChange={(e) => setCourierFilter(e.target.value)}
+            className="rounded-lg border px-3 py-2 text-sm"
+            style={{ borderColor: "var(--line)" }}
+          >
+            <option value="">All couriers</option>
+            {couriers.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <select
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value)}
+            className="rounded-lg border px-3 py-2 text-sm"
+            style={{ borderColor: "var(--line)" }}
+          >
+            <option value="">All sources</option>
+            <option value="manual_pdf">Manual PDF</option>
+            <option value="shopify_sync">Shopify Sync</option>
+          </select>
         </div>
-        <button className="mockup-btn mockup-btn-primary" disabled title="PDF parsing is a Day-4+ build — see EMS_Development_Plan.md">
-          + Import Courier PDF
-        </button>
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => setShowHistory(true)} className="mockup-btn mockup-btn-ghost">
+            🕘 Import History
+          </button>
+          <button
+            disabled
+            title="Requires a connected Shopify store (Admin → API Settings) — not configured in this demo."
+            className="mockup-btn mockup-btn-ghost opacity-50 cursor-not-allowed"
+          >
+            ⟳ Sync Sales
+          </button>
+          <button
+            disabled
+            title="PDF parsing (reading a real courier consignment slip and matching it to orders) is a larger, riskier build than the rest of this app — deliberately not faked. See EMS_Development_Plan.md."
+            className="mockup-btn mockup-btn-primary opacity-50 cursor-not-allowed"
+          >
+            + Import Courier PDF
+          </button>
+        </div>
       </div>
 
       <div className="mockup-card !p-0 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[900px]">
+          <table className="w-full text-sm min-w-[1100px]">
             <thead style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
               <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
                 <th className="px-4 py-3">Order</th>
+                <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3">Customer / City</th>
                 <th className="px-4 py-3">Items</th>
                 <th className="px-4 py-3">Amount</th>
                 <th className="px-4 py-3">Profit</th>
-                <th className="px-4 py-3">Courier</th>
+                <th className="px-4 py-3">Payment</th>
+                <th className="px-4 py-3">Courier / Tracking #</th>
+                <th className="px-4 py-3">Source</th>
                 <th className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center" style={{ color: "var(--muted)" }}>
+                  <td colSpan={10} className="px-4 py-8 text-center" style={{ color: "var(--muted)" }}>
                     Loading…
                   </td>
                 </tr>
@@ -130,6 +190,9 @@ export default function SalesClient({ tenantName, userInitial }: { tenantName: s
                     style={{ borderTop: "1px solid var(--line)" }}
                   >
                     <td className="px-4 py-3 font-mono text-xs">#{o.orderNumber}</td>
+                    <td className="px-4 py-3" style={{ color: "var(--muted)" }}>
+                      {fmtDate(o.placedAt)}
+                    </td>
                     <td className="px-4 py-3">
                       {o.customerName}
                       <br />
@@ -144,7 +207,23 @@ export default function SalesClient({ tenantName, userInitial }: { tenantName: s
                     <td className="px-4 py-3" style={{ color: o.profit > 0 ? "var(--good)" : "var(--muted)" }}>
                       {fmtRs(o.profit)}
                     </td>
-                    <td className="px-4 py-3">{o.courierName ?? "—"}</td>
+                    <td className="px-4 py-3">
+                      <span className="mockup-tag mockup-tag-neutral">{o.paymentType.toUpperCase()}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {o.courierName ?? "—"}
+                      {o.trackingNumber && (
+                        <>
+                          <br />
+                          <span className="text-xs font-mono" style={{ color: "var(--muted)" }}>
+                            {o.trackingNumber}
+                          </span>
+                        </>
+                      )}
+                    </td>
+                    <td className="px-4 py-3" style={{ color: "var(--muted)" }}>
+                      {SOURCE_LABEL[o.source] ?? o.source}
+                    </td>
                     <td className="px-4 py-3">
                       <span className={"mockup-tag " + (STATUS_TAG[o.status] ?? "mockup-tag-neutral")}>{o.status}</span>
                     </td>
@@ -152,7 +231,7 @@ export default function SalesClient({ tenantName, userInitial }: { tenantName: s
                 ))}
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center" style={{ color: "var(--muted)" }}>
+                  <td colSpan={10} className="px-4 py-8 text-center" style={{ color: "var(--muted)" }}>
                     No orders match your filters.
                   </td>
                 </tr>
@@ -161,6 +240,33 @@ export default function SalesClient({ tenantName, userInitial }: { tenantName: s
           </table>
         </div>
       </div>
+
+      <div className="text-sm mt-3" style={{ color: "var(--muted)" }}>
+        Profit = (sale price − real derived cost) per item, summed per order. Returned orders show Rs 0
+        profit — items are restocked and no sale is recognized. Click any row to open the full order detail
+        page.
+      </div>
+
+      {showHistory && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={() => setShowHistory(false)}>
+          <div className="bg-white rounded-xl max-w-lg w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold mb-1">Import History</h2>
+            <p className="text-sm mb-4" style={{ color: "var(--muted)" }}>
+              Every courier PDF ever imported, and what it did to your orders.
+            </p>
+            <div className="text-sm text-center py-8" style={{ color: "var(--muted)" }}>
+              No PDFs imported yet — all {orders.length} order(s) currently in the system were loaded by the
+              seed script, not through this flow. This list will populate once PDF import is built (see the
+              "+ Import Courier PDF" button's tooltip).
+            </div>
+            <div className="flex justify-end">
+              <button onClick={() => setShowHistory(false)} className="mockup-btn mockup-btn-ghost">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }

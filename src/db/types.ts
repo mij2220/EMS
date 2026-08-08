@@ -302,8 +302,13 @@ export interface Vouchers {
   debitAccountId: string;
   enteredBy: string;
   id: Generated<string>;
+  photoData: Buffer | null;
+  photoMimeType: string | null;
   reference: string | null;
   tenantId: string;
+  totalUnits: Numeric | null;
+  unitType: string | null;
+  vendorVoucherNumber: string | null;
   voucherDate: Timestamp;
   voucherNumber: string;
   voucherType: string;

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import { verifySession, SESSION_COOKIE } from "@/lib/auth";
+import { getSessionUser } from "@/lib/session-user";
 import { db } from "@/db";
 import ProductDetailClient from "./product-detail-client";
 
@@ -11,12 +12,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const session = token ? verifySession(token) : null;
   if (!session) redirect("/login");
 
-  const user = await db
-    .selectFrom("users")
-    .innerJoin("tenants", "tenants.id", "users.tenantId")
-    .select(["users.name", "tenants.businessName as tenantName"])
-    .where("users.id", "=", session.userId)
-    .executeTakeFirstOrThrow();
+  const user = await getSessionUser(session);
 
   const product = await db
     .selectFrom("products")

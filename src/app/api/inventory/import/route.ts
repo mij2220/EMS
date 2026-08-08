@@ -28,11 +28,25 @@ export async function POST(req: NextRequest) {
   const headers = headerRow.map((h) => String(h ?? "").trim());
   const colIndex = (name: string) => headers.indexOf(name);
 
-  const required = ["Handle", "Title", "Option1 Value", "Option2 Value"];
-  for (const col of required) {
-    if (colIndex(col) === -1) {
-      return NextResponse.json({ error: `Missing required column "${col}" — this doesn't look like an EMS export.` }, { status: 400 });
+  if (colIndex("Handle") === -1) {
+    return NextResponse.json({ error: 'Missing a "Handle" column — this doesn\'t look like a product export.' }, { status: 400 });
+  }
+
+  // Accepts either EMS's own round-trip export column names, or a real
+  // native Shopify product export's column names — whichever is present.
+  // This matters: a raw Shopify export uses "Variant Price" / "Cost per
+  // item" / "Variant Inventory Qty", not "Sale Price" / "Cost Price" /
+  // "On Hand". Silently not finding those columns would previously import
+  // every price/cost/stock as blank/zero instead of erroring — a real data
+  // corruption risk, not just "won't work".
+  function getAny(row: ExcelJS.Row, ...names: string[]): string | null {
+    for (const name of names) {
+      const idx = colIndex(name);
+      if (idx === -1) continue;
+      const val = row.getCell(idx).value;
+      if (val != null && String(val).trim() !== "") return String(val).trim();
     }
+    return null;
   }
 
   const location = await db
@@ -46,21 +60,51 @@ export async function POST(req: NextRequest) {
   let created = 0;
   const errors: string[] = [];
 
+  // Shopify's own export only fills Title/Option Names on the FIRST row of
+  // each product, leaving them blank on every subsequent variant row of the
+  // same product — these values need to carry forward, not be treated as
+  // "no data on this row".
+  let lastHandle = "";
+  let lastTitle = "";
+  let lastOpt1Name = "";
+  let lastOpt2Name = "";
+
   for (let rowNum = 2; rowNum <= sheet.rowCount; rowNum++) {
     const row = sheet.getRow(rowNum);
     if (row.cellCount === 0) continue;
-    const get = (col: string) => {
-      const idx = colIndex(col);
-      if (idx === -1) return null;
-      const val = row.getCell(idx).value;
-      return val == null ? null : String(val).trim();
-    };
 
-    const handle = get("Handle");
-    const title = get("Title");
-    const option1Value = get("Option1 Value");
-    const option2Value = get("Option2 Value");
-    if (!handle || !title) continue; // skip blank rows
+    const handle = getAny(row, "Handle");
+    if (!handle) continue;
+
+    if (handle !== lastHandle) {
+      lastHandle = handle;
+      lastTitle = "";
+      lastOpt1Name = "";
+      lastOpt2Name = "";
+    }
+
+    const rawTitle = getAny(row, "Title");
+    if (rawTitle) lastTitle = rawTitle;
+    const title = lastTitle;
+
+    const rawOpt1Name = getAny(row, "Option1 Name");
+    if (rawOpt1Name) lastOpt1Name = rawOpt1Name;
+    const rawOpt2Name = getAny(row, "Option2 Name");
+    if (rawOpt2Name) lastOpt2Name = rawOpt2Name;
+
+    const option1Value = getAny(row, "Option1 Value");
+    const option2Value = getAny(row, "Option2 Value");
+    const sku = getAny(row, "SKU", "Variant SKU");
+    const costPrice = getAny(row, "Cost Price", "Cost per item");
+    const salePrice = getAny(row, "Sale Price", "Variant Price");
+    const onHand = getAny(row, "On Hand", "Variant Inventory Qty");
+    const shopifyStatus = getAny(row, "Status"); // Shopify: active | draft | archived
+
+    // A pure image-attachment row (Shopify sometimes adds extra rows just to
+    // carry an additional product photo, with no variant data at all) —
+    // skip it rather than creating a bogus blank variant.
+    if (!option1Value && !option2Value && !salePrice && !onHand && !sku) continue;
+    if (!title) continue; // no title anywhere for this handle yet — can't create a product from this alone
 
     try {
       let product = await db
@@ -77,20 +121,20 @@ export async function POST(req: NextRequest) {
             tenantId: session.tenantId,
             handle,
             title,
-            option1Name: get("Option1 Name") || "Color",
-            option2Name: get("Option2 Name") || "Size",
+            option1Name: lastOpt1Name || "Color",
+            option2Name: lastOpt2Name || "Size",
+            imageUrl: getAny(row, "Image Src"),
             channel: "manual",
-            status: "active",
+            status: shopifyStatus === "draft" || shopifyStatus === "archived" ? shopifyStatus : "active",
           })
           .returning(["id"])
           .executeTakeFirstOrThrow();
         created++;
       }
 
-      const costPrice = get("Cost Price");
-      const salePrice = get("Sale Price");
-      const onHand = get("On Hand");
-      const reorderLevel = get("Reorder Level");
+      const reorderLevel = getAny(row, "Reorder Level");
+      const hsCode = getAny(row, "HS Code");
+      const binName = getAny(row, "Bin Name");
 
       const existingVariant = await db
         .selectFrom("variants")
@@ -101,9 +145,9 @@ export async function POST(req: NextRequest) {
         .executeTakeFirst();
 
       const variantValues = {
-        sku: get("SKU") || null,
-        hsCode: get("HS Code") || null,
-        binName: get("Bin Name") || null,
+        sku: sku || null,
+        hsCode: hsCode || null,
+        binName: binName || null,
         costPrice: costPrice ? Number(costPrice).toString() : null,
         salePrice: salePrice ? Number(salePrice).toString() : null,
         onHand: onHand ? Math.round(Number(onHand)) : 0,

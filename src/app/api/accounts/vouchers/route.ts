@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { getSession } from "@/lib/require-session";
+import { sql } from "kysely";
 
 export async function GET(req: NextRequest) {
   const session = getSession(req);
@@ -19,6 +20,10 @@ export async function GET(req: NextRequest) {
       "vouchers.amount",
       "vouchers.reference",
       "vouchers.attachmentUrl",
+      "vouchers.vendorVoucherNumber",
+      "vouchers.unitType",
+      "vouchers.totalUnits",
+      sql<boolean>`vouchers.photo_data is not null`.as("hasPhoto"),
       "debit_acct.name as debitAccountName",
       "credit_acct.name as creditAccountName",
       "users.name as enteredByName",
@@ -28,7 +33,9 @@ export async function GET(req: NextRequest) {
     .orderBy("vouchers.createdAt", "desc")
     .execute();
 
-  return NextResponse.json({ vouchers: vouchers.map((v) => ({ ...v, amount: Number(v.amount) })) });
+  return NextResponse.json({
+    vouchers: vouchers.map((v) => ({ ...v, amount: Number(v.amount), totalUnits: v.totalUnits != null ? Number(v.totalUnits) : null })),
+  });
 }
 
 export async function POST(req: NextRequest) {

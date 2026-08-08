@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { verifySession, SESSION_COOKIE } from "@/lib/auth";
+import { getSessionUser } from "@/lib/session-user";
 import { db } from "@/db";
 import { sql } from "kysely";
 import InventoryClient from "./inventory-client";
@@ -16,12 +17,7 @@ async function getSessionOrRedirect() {
 export default async function InventoryPage() {
   const session = await getSessionOrRedirect();
 
-  const user = await db
-    .selectFrom("users")
-    .innerJoin("tenants", "tenants.id", "users.tenantId")
-    .select(["users.name", "tenants.businessName as tenantName"])
-    .where("users.id", "=", session.userId)
-    .executeTakeFirstOrThrow();
+  const user = await getSessionUser(session);
 
   const products = await db
     .selectFrom("products")

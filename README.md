@@ -106,55 +106,63 @@ npm run seed
 
 ---
 
-## 3. Deploying to Railway (you already have GitHub + Railway set up)
+## 3. Applying new code changes locally
 
-### Quick start
+If you've received updated code (not a first-time setup — use `setup-local.sh --reset` for that),
+this installs dependencies and rebuilds without touching your database or any data:
 ```bash
-npm install -g @railway/cli   # if you don't have it yet
-git add . && git commit -m "Deploy" && git push
-./scripts/deploy-railway.sh
+./scripts/deploy-local.sh          # rebuild and start the dev server
+./scripts/deploy-local.sh --prod   # test a production build instead
 ```
-
-**Please read this before running it:** `deploy-railway.sh` was written carefully against Railway's
-documented CLI, but — unlike the local setup script above, which was fully tested end-to-end — it could
-**not** be tested against a real Railway account, because the environment this was built in has no
-network access to railway.app. Run it a step at a time the first time (paste the commands one at a time
-into your terminal instead of running the whole file blind), and if any command's flags don't match your
-installed `railway` CLI, run `railway <command> --help` to check current syntax.
-
-### What it does, in order
-1. Checks the Railway CLI is installed
-2. Logs you in (opens a browser)
-3. Links this folder to a Railway project (or creates one)
-4. Adds a PostgreSQL plugin
-5. Sets `JWT_SECRET` (a fresh one, different from your local `.env`) and wires `DATABASE_URL` to the
-   Postgres plugin using Railway's reference-variable syntax
-6. Deploys (`railway up`)
-7. Applies `db/schema.sql` to the deployed database
-8. Asks whether to seed the deployed database with the real demo data, then prints your live URL
-
-### Manual steps (if you'd rather do it by hand)
-1. New Project → Deploy from GitHub repo → select this repo.
-2. Add a plugin: **PostgreSQL**.
-3. On your app service → Variables tab: `DATABASE_URL` → "Add Reference" → the Postgres plugin's
-   `DATABASE_URL`; `JWT_SECRET` → paste the output of `openssl rand -base64 32`.
-4. Railway auto-detects Next.js — no extra config needed.
-5. Apply schema + seed:
-   ```bash
-   railway run bash -c 'psql "$DATABASE_URL" < db/schema.sql'
-   railway run node --import tsx scripts/seed.ts
-   ```
-6. Visit the Railway-provided URL.
-
-Note: Railway's own infrastructure uses containers behind the scenes to run your build — that's Railway's
-concern, not something that happens on your Mac. Nothing here requires Docker to be installed locally.
-
-**Recommended going forward:** keep a `staging` environment that auto-deploys on every push, and only
-promote to production once you've clicked through it — per `EMS_Development_Plan.md`.
+If the update includes a `db/schema.sql` change, that's not automatic — apply it by hand:
+```bash
+psql "$DATABASE_URL" < db/schema.sql
+```
 
 ---
 
-## 4. What's real vs. what's next
+## 4. Deploying to Railway (already set up and confirmed working, project: `EMS Project`)
+
+### First-time setup (already done — for reference)
+1. Railway → New Project → Deploy from GitHub repo → `mij2220/EMS`
+2. Add a plugin: **PostgreSQL**
+3. On the **EMS** app service → Variables: `DATABASE_URL` → reference → Postgres plugin's
+   `DATABASE_URL`; `JWT_SECRET` → a real secret (`openssl rand -base64 32`)
+4. Railway auto-detects Next.js, builds and deploys automatically on every push to `main`
+
+### Shipping a new change
+```bash
+./scripts/deploy-railway.sh
+```
+This builds locally first (fails fast if something's broken), commits + pushes to GitHub (which
+triggers Railway's auto-deploy), and — only if you say yes when asked — re-applies the schema
+and/or reseeds the **live** database.
+
+**A real lesson from actually deploying this app, worth knowing regardless of whether the script
+above works smoothly:** Railway's reference-variable syntax (`${{Postgres.DATABASE_URL}}`)
+resolves to Postgres's *internal* address (`postgres.railway.internal`), which is only reachable
+from inside Railway's network — never from your Mac. Running `railway run` while linked to your
+**app** service inherits that internal value and fails with a DNS error, even though it looks
+like it should work. What actually worked: link to the **Postgres** service specifically (`railway
+link` → when asked for a service, pick **Postgres**, not **EMS**) — it carries its own
+`DATABASE_PUBLIC_URL`, a real externally-reachable address. `deploy-railway.sh` does this
+automatically; if it still fails, the manual fallback that's confirmed to work:
+```bash
+# Railway → Postgres service → Variables tab → copy DATABASE_PUBLIC_URL, then:
+psql "PASTE_DATABASE_PUBLIC_URL_HERE" < db/schema.sql
+DATABASE_URL="PASTE_DATABASE_PUBLIC_URL_HERE" JWT_SECRET="PASTE_JWT_SECRET_HERE" node --import tsx scripts/seed.ts
+```
+(Get `JWT_SECRET` from the **EMS** app service's Variables tab, not Postgres's.)
+
+**Also worth knowing:** it's easy to end up with two similarly-named Railway projects if you
+create one from the dashboard and another gets created some other way — that happened once
+already and cost real debugging time chasing "why can't it find the users table" against the
+wrong project's empty database. If a live database ever seems unexpectedly empty, check you're
+looking at the right project before assuming something's broken.
+
+---
+
+## 5. What's real vs. what's next
 
 **Visual design:** every screen uses a shared `AppShell` component (`src/components/app-shell.tsx`) built
 directly from `EMS_UI_UX_Mockup.html`'s actual colors, fonts, and sidebar structure.
@@ -195,7 +203,7 @@ directly from `EMS_UI_UX_Mockup.html`'s actual colors, fonts, and sidebar struct
 
 ---
 
-## 5. A note on the tech stack vs. the original plan
+## 6. A note on the tech stack vs. the original plan
 
 The development plan recommended **Prisma** as the ORM. Prisma needs to download compiled engine
 binaries at install time, and that download is blocked in the sandboxed environment this was built and

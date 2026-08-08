@@ -13,6 +13,10 @@ type Voucher = {
   debitAccountName: string;
   creditAccountName: string;
   enteredByName: string;
+  vendorVoucherNumber: string | null;
+  unitType: string | null;
+  totalUnits: number | null;
+  hasPhoto: boolean;
 };
 
 type Kpis = { cash: number; vendorPayable: number; courierReceivable: number; monthExpenses: number };
@@ -92,7 +96,7 @@ export default function AccountsClient({ tenantName, userInitial }: { tenantName
 
       <div className="mockup-card !p-0 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[800px]">
+          <table className="w-full text-sm min-w-[900px]">
             <thead style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
               <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
                 <th className="px-4 py-3">Date</th>
@@ -101,6 +105,7 @@ export default function AccountsClient({ tenantName, userInitial }: { tenantName
                 <th className="px-4 py-3">Debit</th>
                 <th className="px-4 py-3">Credit</th>
                 <th className="px-4 py-3">Amount</th>
+                <th className="px-4 py-3">Details</th>
               </tr>
             </thead>
             <tbody>
@@ -112,11 +117,31 @@ export default function AccountsClient({ tenantName, userInitial }: { tenantName
                   <td className="px-4 py-3">{v.debitAccountName}</td>
                   <td className="px-4 py-3">{v.creditAccountName}</td>
                   <td className="px-4 py-3 font-medium">{fmtRs(v.amount)}</td>
+                  <td className="px-4 py-3 text-xs" style={{ color: "var(--muted)" }}>
+                    {v.vendorVoucherNumber && <div>#{v.vendorVoucherNumber}</div>}
+                    {v.totalUnits != null && (
+                      <div>
+                        {v.totalUnits} {v.unitType ?? ""}
+                      </div>
+                    )}
+                    {v.hasPhoto && (
+                      <a
+                        href={`/api/accounts/vouchers/${v.id}/photo`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block mt-1"
+                        style={{ color: "var(--navy)" }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        📷 View photo
+                      </a>
+                    )}
+                  </td>
                 </tr>
               ))}
               {vouchers.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center" style={{ color: "var(--muted)" }}>
+                  <td colSpan={7} className="px-4 py-8 text-center" style={{ color: "var(--muted)" }}>
                     No vouchers yet.
                   </td>
                 </tr>
@@ -269,17 +294,54 @@ function SalaryModal({ employees, onClose, onSaved }: { employees: Employee[]; o
 }
 
 function VendorPurchaseModal({ vendors, onClose, onSaved }: { vendors: Vendor[]; onClose: () => void; onSaved: () => void }) {
-  const { submit, error, saving } = useFormSubmit("/api/accounts/vouchers/vendor-purchase", onSaved, onClose);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const today = new Date().toISOString().slice(0, 10);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setSaving(true);
+    const formData = new FormData(e.currentTarget);
+    try {
+      const res = await fetch("/api/accounts/vouchers/vendor-purchase", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Something went wrong.");
+        return;
+      }
+      onSaved();
+      onClose();
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setPhotoPreview(null);
+      return;
+    }
+    setPhotoPreview(URL.createObjectURL(file));
+  }
+
   return (
     <ModalShell title="Vendor Purchase" onClose={onClose}>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          const f = new FormData(e.currentTarget);
-          submit({ vendorId: f.get("vendorId"), itemDescription: f.get("itemDescription"), amount: f.get("amount") });
-        }}
-        className="space-y-3"
-      >
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold mb-1">Date</label>
+            <input name="voucherDate" type="date" defaultValue={today} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1">Voucher #</label>
+            <input name="vendorVoucherNumber" placeholder="e.g. from the paper slip" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
+          </div>
+        </div>
         <div>
           <label className="block text-xs font-semibold mb-1">Vendor</label>
           <select name="vendorId" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }}>
@@ -294,9 +356,34 @@ function VendorPurchaseModal({ vendors, onClose, onSaved }: { vendors: Vendor[];
           <label className="block text-xs font-semibold mb-1">Item Description</label>
           <input name="itemDescription" placeholder="e.g. Fabric — cotton roll" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold mb-1">Unit Type</label>
+            <select name="unitType" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }}>
+              <option value="qty">Qty</option>
+              <option value="kg">Kg</option>
+              <option value="feet">Feet</option>
+              <option value="meters">Meters</option>
+              <option value="yards">Yards</option>
+              <option value="rolls">Rolls</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1">Total Units</label>
+            <input name="totalUnits" type="number" step="0.01" placeholder="e.g. 120" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
+          </div>
+        </div>
         <div>
           <label className="block text-xs font-semibold mb-1">Total Amount (Rs)</label>
           <input name="amount" type="number" step="0.01" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold mb-1">Voucher Photo</label>
+          <input name="photo" type="file" accept="image/*" onChange={handlePhotoChange} className="w-full text-sm" />
+          {photoPreview && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={photoPreview} alt="Voucher preview" className="mt-2 rounded-lg border max-h-40 object-contain" style={{ borderColor: "var(--line)" }} />
+          )}
         </div>
         {error && <div className="text-sm rounded-lg px-3 py-2" style={{ background: "var(--bad-bg)", color: "var(--bad)" }}>{error}</div>}
         <div className="flex justify-end gap-2 pt-2">

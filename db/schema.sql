@@ -11,6 +11,16 @@
 
 create extension if not exists "pgcrypto"; -- for gen_random_uuid()
 
+-- Tracks which files from db/migrations/ have already been applied to this
+-- database, so scripts can apply only what's new instead of relying on a
+-- person to remember which migrations they've already run. A fresh
+-- database created from this schema.sql is already fully up to date, so it
+-- doesn't need any of db/migrations/ applied — see scripts/apply-migrations.sh.
+create table if not exists schema_migrations (
+  filename    text primary key,
+  applied_at  timestamptz not null default now()
+);
+
 -- ============================================================================
 -- TENANCY
 -- ============================================================================
@@ -240,6 +250,11 @@ create table vouchers (
   amount            numeric(12,2) not null,
   reference         text,
   attachment_url    text,
+  vendor_voucher_number text,                            -- the physical paper voucher's own number, distinct from voucher_number above
+  unit_type         text,                                -- 'qty' | 'kg' | 'feet' | ... — free text, whatever the vendor's slip uses
+  total_units       numeric(12,2),
+  photo_data        bytea,                               -- the voucher photo itself, stored inline (no external object storage configured)
+  photo_mime_type   text,
   entered_by        uuid not null references users(id),
   created_at        timestamptz not null default now(),
   unique (tenant_id, voucher_number),
