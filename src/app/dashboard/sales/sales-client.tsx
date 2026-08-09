@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { useSortableTable, SortArrow } from "@/lib/use-sortable-table";
 import AppShell from "@/components/app-shell";
 
 type Order = {
@@ -78,6 +79,8 @@ export default function SalesClient({ tenantName, userInitial }: { tenantName: s
       );
     });
   }, [orders, search, statusFilter, courierFilter, sourceFilter]);
+
+  const { sorted, sortKey, sortDir, toggleSort } = useSortableTable(filtered, "placedAt");
 
   return (
     <AppShell
@@ -161,16 +164,28 @@ export default function SalesClient({ tenantName, userInitial }: { tenantName: s
           <table className="w-full text-sm min-w-[1100px]">
             <thead style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
               <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
-                <th className="px-4 py-3">Order</th>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Customer / City</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("orderNumber")}>
+                  Order<SortArrow active={sortKey === "orderNumber"} dir={sortDir} />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("placedAt")}>
+                  Date<SortArrow active={sortKey === "placedAt"} dir={sortDir} />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("customerName")}>
+                  Customer / City<SortArrow active={sortKey === "customerName"} dir={sortDir} />
+                </th>
                 <th className="px-4 py-3">Items</th>
-                <th className="px-4 py-3">Amount</th>
-                <th className="px-4 py-3">Profit</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("amount")}>
+                  Amount<SortArrow active={sortKey === "amount"} dir={sortDir} />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("profit")}>
+                  Profit<SortArrow active={sortKey === "profit"} dir={sortDir} />
+                </th>
                 <th className="px-4 py-3">Payment</th>
                 <th className="px-4 py-3">Courier / Tracking #</th>
                 <th className="px-4 py-3">Source</th>
-                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("status")}>
+                  Status<SortArrow active={sortKey === "status"} dir={sortDir} />
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -182,7 +197,7 @@ export default function SalesClient({ tenantName, userInitial }: { tenantName: s
                 </tr>
               )}
               {!loading &&
-                filtered.map((o) => (
+                sorted.map((o) => (
                   <tr
                     key={o.id}
                     onClick={() => router.push(`/dashboard/sales/${o.id}`)}

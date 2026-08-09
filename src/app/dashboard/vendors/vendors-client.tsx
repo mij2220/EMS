@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app-shell";
+import { useSortableTable, SortArrow } from "@/lib/use-sortable-table";
 
 type Vendor = { id: string; name: string; contact: string | null; status: string; payableBalance: number; lastActivity: string | null };
 
@@ -13,6 +14,7 @@ function fmtRs(n: number) {
 export default function VendorsClient({ tenantName, userInitial }: { tenantName: string; userInitial: string }) {
   const router = useRouter();
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const { sorted, sortKey, sortDir, toggleSort } = useSortableTable(vendors, "name");
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Vendor | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -106,16 +108,20 @@ export default function VendorsClient({ tenantName, userInitial }: { tenantName:
         <table className="w-full text-sm">
           <thead style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
             <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
-              <th className="px-4 py-3">Vendor</th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("name")}>
+                Vendor<SortArrow active={sortKey === "name"} dir={sortDir} />
+              </th>
               <th className="px-4 py-3">Contact</th>
-              <th className="px-4 py-3">Payable Balance</th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("payableBalance")}>
+                Payable Balance<SortArrow active={sortKey === "payableBalance"} dir={sortDir} />
+              </th>
               <th className="px-4 py-3">Last Activity</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {vendors.map((v) => (
+            {sorted.map((v) => (
               <tr
                 key={v.id}
                 onClick={() => router.push(`/dashboard/vendors/${v.id}`)}

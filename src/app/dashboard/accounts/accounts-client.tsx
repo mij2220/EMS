@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import AppShell from "@/components/app-shell";
+import { useSortableTable, SortArrow } from "@/lib/use-sortable-table";
 
 type Voucher = {
   id: string;
@@ -32,6 +33,7 @@ function fmtRs(n: number) {
 export default function AccountsClient({ tenantName, userInitial }: { tenantName: string; userInitial: string }) {
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
+  const { sorted: sortedVouchers, sortKey: voucherSortKey, sortDir: voucherSortDir, toggleSort: toggleVoucherSort } = useSortableTable(vouchers, "voucherDate");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -60,7 +62,7 @@ export default function AccountsClient({ tenantName, userInitial }: { tenantName
   return (
     <AppShell active="accounts" title="Accounts" desc="Cash, vendor, salary, expense and courier ledgers" tenantName={tenantName} userInitial={userInitial}>
       {kpis && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="mockup-card">
             <div className="mockup-kpi-label">Cash Balance</div>
             <div className="mockup-kpi-value">{fmtRs(kpis.cash)}</div>
@@ -100,17 +102,23 @@ export default function AccountsClient({ tenantName, userInitial }: { tenantName
           <table className="w-full text-sm min-w-[900px]">
             <thead style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
               <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Voucher</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleVoucherSort("voucherDate")}>
+                  Date<SortArrow active={voucherSortKey === "voucherDate"} dir={voucherSortDir} />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleVoucherSort("voucherType")}>
+                  Voucher<SortArrow active={voucherSortKey === "voucherType"} dir={voucherSortDir} />
+                </th>
                 <th className="px-4 py-3">Reference</th>
                 <th className="px-4 py-3">Debit</th>
                 <th className="px-4 py-3">Credit</th>
-                <th className="px-4 py-3">Amount</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleVoucherSort("amount")}>
+                  Amount<SortArrow active={voucherSortKey === "amount"} dir={voucherSortDir} />
+                </th>
                 <th className="px-4 py-3">Details</th>
               </tr>
             </thead>
             <tbody>
-              {vouchers.map((v) => (
+              {sortedVouchers.map((v) => (
                 <tr key={v.id} onClick={() => setSelectedVoucherId(v.id)} className="cursor-pointer hover:bg-slate-50" style={{ borderTop: "1px solid var(--line)" }}>
                   <td className="px-4 py-3">{new Date(v.voucherDate).toLocaleDateString()}</td>
                   <td className="px-4 py-3">{v.voucherType}</td>
@@ -221,7 +229,7 @@ function ExpenseModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
             <option>Miscellaneous</option>
           </select>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold mb-1">Amount (Rs)</label>
             <input name="amount" type="number" step="0.01" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
@@ -270,7 +278,7 @@ function SalaryModal({ employees, onClose, onSaved }: { employees: Employee[]; o
             ))}
           </select>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold mb-1">Pay Period</label>
             <input name="period" placeholder="e.g. August 2026" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
@@ -336,7 +344,7 @@ function VendorPurchaseModal({ vendors, onClose, onSaved }: { vendors: Vendor[];
   return (
     <ModalShell title="Vendor Purchase" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold mb-1">Date</label>
             <input name="voucherDate" type="date" defaultValue={today} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
@@ -360,7 +368,7 @@ function VendorPurchaseModal({ vendors, onClose, onSaved }: { vendors: Vendor[];
           <label className="block text-xs font-semibold mb-1">Item Description</label>
           <input name="itemDescription" placeholder="e.g. Fabric — cotton roll" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold mb-1">Unit Type</label>
             <select name="unitType" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }}>
@@ -417,7 +425,7 @@ function NewVoucherModal({ accounts, onClose, onSaved }: { accounts: Account[]; 
         }}
         className="space-y-3"
       >
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold mb-1">Voucher Type</label>
             <select name="voucherType" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }}>
@@ -431,7 +439,7 @@ function NewVoucherModal({ accounts, onClose, onSaved }: { accounts: Account[]; 
             <input name="amount" type="number" step="0.01" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold mb-1">Debit Account</label>
             <select name="debitAccountId" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }}>
@@ -609,7 +617,7 @@ function VoucherDetailModal({ voucherId, onClose, onChanged }: { voucherId: stri
           <>
             <h2 className="text-lg font-bold mb-4">Edit {voucher.voucherNumber}</h2>
             <form onSubmit={handleSave} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold mb-1">Date</label>
                   <input name="voucherDate" type="date" defaultValue={voucher.voucherDate.slice(0, 10)} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
@@ -623,7 +631,7 @@ function VoucherDetailModal({ voucherId, onClose, onChanged }: { voucherId: stri
                 <label className="block text-xs font-semibold mb-1">Reference</label>
                 <input name="reference" defaultValue={voucher.reference ?? ""} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold mb-1">Unit Type</label>
                   <input name="unitType" defaultValue={voucher.unitType ?? ""} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />

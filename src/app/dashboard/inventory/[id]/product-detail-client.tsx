@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app-shell";
+import { useSortableTable, SortArrow } from "@/lib/use-sortable-table";
 
 type Variant = {
   id: string;
@@ -67,6 +68,7 @@ export default function ProductDetailClient({
   const router = useRouter();
   const [product, setProduct] = useState(initialProduct);
   const [variants, setVariants] = useState(initialVariants);
+  const { sorted, sortKey, sortDir, toggleSort } = useSortableTable(variants, "onHand");
   const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -173,15 +175,21 @@ export default function ProductDetailClient({
               <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
                 <th className="px-4 py-2">Variant</th>
                 <th className="px-4 py-2">SKU</th>
-                <th className="px-4 py-2">Cost</th>
-                <th className="px-4 py-2">Price</th>
-                <th className="px-4 py-2">On Hand</th>
+                <th className="px-4 py-2 cursor-pointer select-none" onClick={() => toggleSort("costPrice")}>
+                  Cost<SortArrow active={sortKey === "costPrice"} dir={sortDir} />
+                </th>
+                <th className="px-4 py-2 cursor-pointer select-none" onClick={() => toggleSort("salePrice")}>
+                  Price<SortArrow active={sortKey === "salePrice"} dir={sortDir} />
+                </th>
+                <th className="px-4 py-2 cursor-pointer select-none" onClick={() => toggleSort("onHand")}>
+                  On Hand<SortArrow active={sortKey === "onHand"} dir={sortDir} />
+                </th>
                 <th className="px-4 py-2">Reorder</th>
                 <th className="px-4 py-2"></th>
               </tr>
             </thead>
             <tbody>
-              {variants.map((v) => (
+              {sorted.map((v) => (
                 <tr key={v.id} style={{ borderTop: "1px solid var(--line)" }}>
                   <td className="px-4 py-2">
                     {v.option1Value} / {v.option2Value}

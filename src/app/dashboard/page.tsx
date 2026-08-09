@@ -127,7 +127,7 @@ export default async function DashboardPage() {
       tenantName={user.tenantName}
       userInitial={user.name.charAt(0).toUpperCase()}
     >
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="mockup-card">
           <div className="mockup-kpi-label">Today&apos;s Sales</div>
           <div className="mockup-kpi-value">{fmtRs(todaySales)}</div>

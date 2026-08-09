@@ -181,6 +181,37 @@ same discipline is required going forward.
   `EMS_Database_Schema.sql` — earlier planning docs, still accurate for architecture/schema,
   though the actual codebase has since surpassed the original 7-day-plan scope in places
 
+## Mobile responsiveness and table sorting
+
+**Sorting** — a reusable client-side hook (`src/lib/use-sortable-table.tsx`) applied to every real
+data table in the app: Inventory, Sales & Delivery, Accounts vouchers ledger, Vendors, Employees,
+Customers, Admin Users, Dashboard, Reports' Payable/Receivable/Expense Breakdown tabs, Vendor
+detail ledger, Employee detail history, Courier detail's Batches/Variance tabs, and Product detail
+variants. Click a column header to sort ascending, click again for descending; an arrow indicates
+the active column and direction. Verified for real: fetched real product data and ran the exact
+sort comparator against it outside the browser to confirm correctness (numbers sort numerically,
+not as strings; nulls sort last), then confirmed via rendered HTML that each page's headers
+actually carry the click handler and the default-sorted column shows the active arrow.
+
+**Deliberately NOT sortable, by design, not oversight:** the Daily Account Report, Courier
+Ledger tab, and the product detail page's Recent Stock Adjustments log. All three show a running
+balance or are activity logs where the display order IS the meaning — sorting them by amount
+would make the running-balance column nonsensical. Don't add sorting to these without first
+deciding what a sorted running balance would even mean.
+
+**A real bug caught before shipping:** the sort hook's file was named `.ts` but contained JSX —
+fails to compile. Caught via an actual build, not code review, renamed to `.tsx`.
+
+**Mobile responsiveness:** the sidebar/shell already had genuine mobile handling before this
+round (hamburger menu, slide-out sidebar with backdrop, truncating header text) — that wasn't
+built this session. What was added: KPI card grids and 2/3-column form-field grids across
+Dashboard, Accounts, Inventory, and Reports now stack to a single column below the `sm` breakpoint
+instead of staying cramped. Tables themselves rely on horizontal scroll on narrow screens
+(pattern already in place from earlier — `overflow-x-auto` wrappers), not a card-based mobile
+redesign — this is a deliberate scope decision given the number of tables involved, not
+something skipped by accident. If a fully mobile-native table layout (cards instead of horizontal
+scroll) is wanted for specific high-traffic tables, that's a larger follow-up, not done here.
+
 ## Shopify integration — in progress, credentials layer done, sync itself not started
 
 `Admin` page now has a real "Connect Shopify" flow: store URL + Admin API access token, encrypted

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app-shell";
+import { useSortableTable, SortArrow } from "@/lib/use-sortable-table";
 
 type Employee = {
   id: string;
@@ -22,6 +23,7 @@ function fmtRs(n: number) {
 export default function EmployeesClient({ tenantName, userInitial }: { tenantName: string; userInitial: string }) {
   const router = useRouter();
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const { sorted, sortKey, sortDir, toggleSort } = useSortableTable(employees, "name");
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -115,16 +117,20 @@ export default function EmployeesClient({ tenantName, userInitial }: { tenantNam
         <table className="w-full text-sm">
           <thead style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
             <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
-              <th className="px-4 py-3">Name</th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("name")}>
+                Name<SortArrow active={sortKey === "name"} dir={sortDir} />
+              </th>
               <th className="px-4 py-3">Role</th>
               <th className="px-4 py-3">Last Payment</th>
-              <th className="px-4 py-3">Advance Balance</th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("advanceBalance")}>
+                Advance Balance<SortArrow active={sortKey === "advanceBalance"} dir={sortDir} />
+              </th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {employees.map((e) => (
+            {sorted.map((e) => (
               <tr
                 key={e.id}
                 onClick={() => router.push(`/dashboard/employees/${e.id}`)}

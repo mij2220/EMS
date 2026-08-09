@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app-shell";
+import { useSortableTable, SortArrow } from "@/lib/use-sortable-table";
 
 type Ledger = { id: string; entryType: string; amount: number; balanceAfter: number; createdAt: string; orderNumber: string | null };
 type Batch = { id: string; batchNumber: string; amount: number; status: string; createdAt: string };
@@ -19,6 +20,8 @@ export default function CourierDetailClient({ courierId, tenantName, userInitial
   const [ledger, setLedger] = useState<Ledger[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [variance, setVariance] = useState<Variance[]>([]);
+  const batchSort = useSortableTable(batches, "createdAt");
+  const varianceSort = useSortableTable(variance, "orderNumber");
   const [tab, setTab] = useState<"ledger" | "batches" | "variance">("ledger");
   const [showRemit, setShowRemit] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -125,13 +128,17 @@ export default function CourierDetailClient({ courierId, tenantName, userInitial
             <thead style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
               <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
                 <th className="px-4 py-3">Batch</th>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Amount</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => batchSort.toggleSort("createdAt")}>
+                  Date<SortArrow active={batchSort.sortKey === "createdAt"} dir={batchSort.sortDir} />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => batchSort.toggleSort("amount")}>
+                  Amount<SortArrow active={batchSort.sortKey === "amount"} dir={batchSort.sortDir} />
+                </th>
                 <th className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>
-              {batches.map((b) => (
+              {batchSort.sorted.map((b) => (
                 <tr key={b.id} style={{ borderTop: "1px solid var(--line)" }}>
                   <td className="px-4 py-3 font-mono text-xs">#{b.batchNumber}</td>
                   <td className="px-4 py-3">{new Date(b.createdAt).toLocaleDateString()}</td>
@@ -158,15 +165,19 @@ export default function CourierDetailClient({ courierId, tenantName, userInitial
           <table className="w-full text-sm">
             <thead style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
               <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
-                <th className="px-4 py-3">Order</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => varianceSort.toggleSort("orderNumber")}>
+                  Order<SortArrow active={varianceSort.sortKey === "orderNumber"} dir={varianceSort.sortDir} />
+                </th>
                 <th className="px-4 py-3">Consignee / City</th>
-                <th className="px-4 py-3">Slip Amount</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => varianceSort.toggleSort("slipAmount")}>
+                  Slip Amount<SortArrow active={varianceSort.sortKey === "slipAmount"} dir={varianceSort.sortDir} />
+                </th>
                 <th className="px-4 py-3">Remitted</th>
                 <th className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>
-              {variance.map((v) => (
+              {varianceSort.sorted.map((v) => (
                 <tr key={v.id} style={{ borderTop: "1px solid var(--line)" }}>
                   <td className="px-4 py-3 font-mono text-xs">#{v.orderNumber}</td>
                   <td className="px-4 py-3">

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import AppShell from "@/components/app-shell";
+import { useSortableTable, SortArrow } from "@/lib/use-sortable-table";
 
 type User = {
   id: string;
@@ -24,6 +25,7 @@ type Integration = {
 
 export default function AdminClient({ tenantName, userInitial }: { tenantName: string; userInitial: string }) {
   const [users, setUsers] = useState<User[]>([]);
+  const { sorted, sortKey, sortDir, toggleSort } = useSortableTable(users, "name");
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [showShopifyForm, setShowShopifyForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -159,16 +161,20 @@ export default function AdminClient({ tenantName, userInitial }: { tenantName: s
         <table className="w-full text-sm">
           <thead style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
             <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
-              <th className="px-4 py-3">Name</th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("name")}>
+                Name<SortArrow active={sortKey === "name"} dir={sortDir} />
+              </th>
               <th className="px-4 py-3">Email</th>
               <th className="px-4 py-3">Role</th>
               <th className="px-4 py-3">2FA</th>
-              <th className="px-4 py-3">Last Login</th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("lastLoginAt")}>
+                Last Login<SortArrow active={sortKey === "lastLoginAt"} dir={sortDir} />
+              </th>
               <th className="px-4 py-3">Status</th>
             </tr>
           </thead>
           <tbody>
-            {users.map((u) => (
+            {sorted.map((u) => (
               <tr key={u.id} style={{ borderTop: "1px solid var(--line)" }}>
                 <td className="px-4 py-3 font-medium">{u.name}</td>
                 <td className="px-4 py-3" style={{ color: "var(--muted)" }}>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app-shell";
+import { useSortableTable, SortArrow } from "@/lib/use-sortable-table";
 
 type History = { id: string; voucherNumber: string; voucherDate: string; amount: number; reference: string | null };
 type Employee = { id: string; name: string; role: string | null; baseSalary: number | null; advanceBalance: number };
@@ -15,6 +16,7 @@ export default function EmployeeDetailClient({ employeeId, tenantName, userIniti
   const router = useRouter();
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [history, setHistory] = useState<History[]>([]);
+  const { sorted, sortKey, sortDir, toggleSort } = useSortableTable(history, "voucherDate");
 
   useEffect(() => {
     fetch(`/api/employees/${employeeId}`)
@@ -38,13 +40,17 @@ export default function EmployeeDetailClient({ employeeId, tenantName, userIniti
         <table className="w-full text-sm">
           <thead style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
             <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
-              <th className="px-4 py-3">Date</th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("voucherDate")}>
+                Date<SortArrow active={sortKey === "voucherDate"} dir={sortDir} />
+              </th>
               <th className="px-4 py-3">Reference</th>
-              <th className="px-4 py-3">Amount</th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("amount")}>
+                Amount<SortArrow active={sortKey === "amount"} dir={sortDir} />
+              </th>
             </tr>
           </thead>
           <tbody>
-            {history.map((h) => (
+            {sorted.map((h) => (
               <tr key={h.id} style={{ borderTop: "1px solid var(--line)" }}>
                 <td className="px-4 py-3">{new Date(h.voucherDate).toLocaleDateString()}</td>
                 <td className="px-4 py-3">{h.reference}</td>

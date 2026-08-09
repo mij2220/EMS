@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef } from "react";
+import { useSortableTable, SortArrow } from "@/lib/use-sortable-table";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app-shell";
 
@@ -75,6 +76,8 @@ export default function InventoryClient({
       return p.title.toLowerCase().includes(q) || p.handle.toLowerCase().includes(q);
     });
   }, [products, search, statusFilter, locationFilter]);
+
+  const { sorted, sortKey, sortDir, toggleSort } = useSortableTable(filtered, "title");
 
   async function handleAddProduct(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -311,18 +314,26 @@ export default function InventoryClient({
                     onChange={toggleSelectAll}
                   />
                 </th>
-                <th className="px-4 py-3">Product</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("title")}>
+                  Product<SortArrow active={sortKey === "title"} dir={sortDir} />
+                </th>
                 <th className="px-4 py-3">Variant</th>
                 <th className="px-4 py-3">SKU</th>
-                <th className="px-4 py-3">Cost</th>
-                <th className="px-4 py-3">Sale Price</th>
-                <th className="px-4 py-3">On Hand</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("minCost")}>
+                  Cost<SortArrow active={sortKey === "minCost"} dir={sortDir} />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("minPrice")}>
+                  Sale Price<SortArrow active={sortKey === "minPrice"} dir={sortDir} />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("totalOnHand")}>
+                  On Hand<SortArrow active={sortKey === "totalOnHand"} dir={sortDir} />
+                </th>
                 <th className="px-4 py-3">Profit / unit</th>
                 <th className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p) => {
+              {sorted.map((p) => {
                 const st = statusOf(p);
                 const profit =
                   p.minPrice != null && p.minCost != null ? p.minPrice - p.minCost : null;
@@ -400,7 +411,7 @@ export default function InventoryClient({
                 <label className="block text-xs font-semibold mb-1">Title</label>
                 <input name="title" required className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold mb-1">Color</label>
                   <input name="option1Value" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
@@ -410,7 +421,7 @@ export default function InventoryClient({
                   <input name="option2Value" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-semibold mb-1">Cost (Rs)</label>
                   <input name="costPrice" type="number" step="0.01" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />

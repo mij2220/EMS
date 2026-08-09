@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app-shell";
+import { useSortableTable, SortArrow } from "@/lib/use-sortable-table";
 
 type StockValuation = { totalCostValue: number; totalRetailValue: number; topProducts: { title: string; onHand: number; costValue: number; retailValue: number }[] };
 type Sales = { orderCount: number; grossSales: number; netSales: number };
@@ -40,6 +41,10 @@ export default function ReportsClient({
   const [courierSummary, setCourierSummary] = useState<CourierSummaryRow[]>([]);
   const [payable, setPayable] = useState<PayableRow[]>([]);
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategoryRow[]>([]);
+
+  const courierSort = useSortableTable(courierSummary, "courierName");
+  const payableSort = useSortableTable(payable, "vendorName");
+  const expenseSort = useSortableTable(expenseCategories, "total");
 
   useEffect(() => {
     fetch("/api/reports/summary")
@@ -82,7 +87,7 @@ export default function ReportsClient({
 
       {tab === "valuation" && valuation && (
         <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="mockup-card">
               <div className="mockup-kpi-label">Total Cost Value</div>
               <div className="mockup-kpi-value">{fmtRs(valuation.totalCostValue)}</div>
@@ -122,7 +127,7 @@ export default function ReportsClient({
       )}
 
       {tab === "sales" && sales && (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="mockup-card">
             <div className="mockup-kpi-label">Orders</div>
             <div className="mockup-kpi-value">{sales.orderCount}</div>
@@ -207,15 +212,19 @@ export default function ReportsClient({
           <table className="w-full text-sm">
             <thead style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
               <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
-                <th className="px-4 py-3">Courier</th>
-                <th className="px-4 py-3">Outstanding Balance</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => courierSort.toggleSort("courierName")}>
+                  Courier<SortArrow active={courierSort.sortKey === "courierName"} dir={courierSort.sortDir} />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => courierSort.toggleSort("outstandingBalance")}>
+                  Outstanding Balance<SortArrow active={courierSort.sortKey === "outstandingBalance"} dir={courierSort.sortDir} />
+                </th>
                 <th className="px-4 py-3">Orders</th>
                 <th className="px-4 py-3">Delivered</th>
                 <th className="px-4 py-3">Returned</th>
               </tr>
             </thead>
             <tbody>
-              {courierSummary.map((c) => (
+              {courierSort.sorted.map((c) => (
                 <tr
                   key={c.courierId}
                   onClick={() => router.push(`/dashboard/courier/${c.courierId}`)}
@@ -252,13 +261,17 @@ export default function ReportsClient({
           <table className="w-full text-sm">
             <thead style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
               <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
-                <th className="px-4 py-3">Vendor</th>
-                <th className="px-4 py-3">Payable Balance</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => payableSort.toggleSort("vendorName")}>
+                  Vendor<SortArrow active={payableSort.sortKey === "vendorName"} dir={payableSort.sortDir} />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => payableSort.toggleSort("payableBalance")}>
+                  Payable Balance<SortArrow active={payableSort.sortKey === "payableBalance"} dir={payableSort.sortDir} />
+                </th>
                 <th className="px-4 py-3">Last Activity</th>
               </tr>
             </thead>
             <tbody>
-              {payable.map((p) => (
+              {payableSort.sorted.map((p) => (
                 <tr
                   key={p.vendorId}
                   onClick={() => router.push(`/dashboard/vendors/${p.vendorId}`)}
@@ -292,12 +305,16 @@ export default function ReportsClient({
           <table className="w-full text-sm">
             <thead style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
               <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
-                <th className="px-4 py-3">Category</th>
-                <th className="px-4 py-3">Total</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => expenseSort.toggleSort("category")}>
+                  Category<SortArrow active={expenseSort.sortKey === "category"} dir={expenseSort.sortDir} />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => expenseSort.toggleSort("total")}>
+                  Total<SortArrow active={expenseSort.sortKey === "total"} dir={expenseSort.sortDir} />
+                </th>
               </tr>
             </thead>
             <tbody>
-              {expenseCategories.map((c) => (
+              {expenseSort.sorted.map((c) => (
                 <tr key={c.category} style={{ borderTop: "1px solid var(--line)" }}>
                   <td className="px-4 py-3 font-medium">{c.category}</td>
                   <td className="px-4 py-3">{fmtRs(c.total)}</td>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app-shell";
+import { useSortableTable, SortArrow } from "@/lib/use-sortable-table";
 
 type Ledger = { id: string; voucherNumber: string; voucherDate: string; amount: number; reference: string | null; direction: "purchase" | "payment" };
 type Vendor = { id: string; name: string; contact: string | null };
@@ -15,6 +16,7 @@ export default function VendorDetailClient({ vendorId, tenantName, userInitial }
   const router = useRouter();
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [ledger, setLedger] = useState<Ledger[]>([]);
+  const { sorted, sortKey, sortDir, toggleSort } = useSortableTable(ledger, "voucherDate");
 
   useEffect(() => {
     fetch(`/api/vendors/${vendorId}`)
@@ -41,14 +43,18 @@ export default function VendorDetailClient({ vendorId, tenantName, userInitial }
         <table className="w-full text-sm">
           <thead style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
             <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
-              <th className="px-4 py-3">Date</th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("voucherDate")}>
+                Date<SortArrow active={sortKey === "voucherDate"} dir={sortDir} />
+              </th>
               <th className="px-4 py-3">Type</th>
               <th className="px-4 py-3">Reference</th>
-              <th className="px-4 py-3">Amount</th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("amount")}>
+                Amount<SortArrow active={sortKey === "amount"} dir={sortDir} />
+              </th>
             </tr>
           </thead>
           <tbody>
-            {ledger.map((l) => (
+            {sorted.map((l) => (
               <tr key={l.id} style={{ borderTop: "1px solid var(--line)" }}>
                 <td className="px-4 py-3">{new Date(l.voucherDate).toLocaleDateString()}</td>
                 <td className="px-4 py-3">{l.direction === "purchase" ? "Purchase (bill)" : "Payment"}</td>
