@@ -7,17 +7,33 @@ type StockValuation = { totalCostValue: number; totalRetailValue: number; topPro
 type Sales = { orderCount: number; grossSales: number; netSales: number };
 type ProfitLoss = { revenue: number; cogs: number; grossProfit: number; expenses: number; netProfit: number };
 type DayBookRow = { id: string; voucherDate: string; voucherType: string; reference: string | null; amount: number; delta: number; runningBalance: number };
+type CourierSummaryRow = { courierId: string; courierName: string; outstandingBalance: number; orderCount: number; deliveredCount: number; returnedCount: number };
 
 function fmtRs(n: number) {
   return "Rs " + Math.round(n).toLocaleString("en-US");
 }
 
-export default function ReportsClient({ tenantName, userInitial }: { tenantName: string; userInitial: string }) {
-  const [tab, setTab] = useState<"valuation" | "sales" | "pl" | "daybook">("valuation");
+const VALID_TABS = ["valuation", "sales", "pl", "daybook", "courier"] as const;
+type TabKey = (typeof VALID_TABS)[number];
+
+export default function ReportsClient({
+  tenantName,
+  userInitial,
+  initialTab,
+  activeNavKey,
+}: {
+  tenantName: string;
+  userInitial: string;
+  initialTab?: string;
+  activeNavKey: string;
+}) {
+  const startingTab: TabKey = VALID_TABS.includes(initialTab as TabKey) ? (initialTab as TabKey) : "valuation";
+  const [tab, setTab] = useState<TabKey>(startingTab);
   const [valuation, setValuation] = useState<StockValuation | null>(null);
   const [sales, setSales] = useState<Sales | null>(null);
   const [pl, setPl] = useState<ProfitLoss | null>(null);
   const [dayBook, setDayBook] = useState<DayBookRow[]>([]);
+  const [courierSummary, setCourierSummary] = useState<CourierSummaryRow[]>([]);
 
   useEffect(() => {
     fetch("/api/reports/summary")
@@ -27,6 +43,7 @@ export default function ReportsClient({ tenantName, userInitial }: { tenantName:
         setSales(d.sales);
         setPl(d.profitLoss);
         setDayBook(d.dayBook ?? []);
+        setCourierSummary(d.courierSummary ?? []);
       });
   }, []);
 
@@ -35,10 +52,11 @@ export default function ReportsClient({ tenantName, userInitial }: { tenantName:
     { key: "sales", label: "Sales Summary" },
     { key: "pl", label: "Profit & Loss" },
     { key: "daybook", label: "Daily Account Report" },
+    { key: "courier", label: "Courier Summary" },
   ] as const;
 
   return (
-    <AppShell active="inventory-reports" title="Reports" desc="Stock valuation, sales, profit & loss, and daily account report — computed live" tenantName={tenantName} userInitial={userInitial}>
+    <AppShell active={activeNavKey} title="Reports" desc="Stock valuation, sales, profit & loss, daily account report, and courier summary — computed live" tenantName={tenantName} userInitial={userInitial}>
       <div className="flex gap-1 mb-4 border-b overflow-x-auto" style={{ borderColor: "var(--line)" }}>
         {TABS.map((t) => (
           <button
@@ -170,6 +188,43 @@ export default function ReportsClient({ tenantName, userInitial }: { tenantName:
           </div>
           <div className="px-4 py-3 text-xs" style={{ color: "var(--muted)", borderTop: "1px solid var(--line)" }}>
             This running balance should always match the Cash Balance KPI on Accounts — that&apos;s the check that proves this report is real, not decorative.
+          </div>
+        </div>
+      )}
+
+      {tab === "courier" && (
+        <div className="mockup-card !p-0 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
+              <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
+                <th className="px-4 py-3">Courier</th>
+                <th className="px-4 py-3">Outstanding Balance</th>
+                <th className="px-4 py-3">Orders</th>
+                <th className="px-4 py-3">Delivered</th>
+                <th className="px-4 py-3">Returned</th>
+              </tr>
+            </thead>
+            <tbody>
+              {courierSummary.map((c) => (
+                <tr key={c.courierId} style={{ borderTop: "1px solid var(--line)" }}>
+                  <td className="px-4 py-3 font-medium">{c.courierName}</td>
+                  <td className="px-4 py-3">{fmtRs(c.outstandingBalance)}</td>
+                  <td className="px-4 py-3">{c.orderCount}</td>
+                  <td className="px-4 py-3" style={{ color: "var(--good)" }}>{c.deliveredCount}</td>
+                  <td className="px-4 py-3" style={{ color: "var(--bad)" }}>{c.returnedCount}</td>
+                </tr>
+              ))}
+              {courierSummary.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center" style={{ color: "var(--muted)" }}>
+                    No couriers set up yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          <div className="px-4 py-3 text-xs" style={{ color: "var(--muted)", borderTop: "1px solid var(--line)" }}>
+            Outstanding Balance here should match each courier&apos;s balance on the Courier module&apos;s own detail page — same underlying vouchers, computed the same way.
           </div>
         </div>
       )}

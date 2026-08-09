@@ -32,6 +32,18 @@ don't reconstruct from memory or assumption.
   schema migration — see `db/migrations/001_voucher_photo_and_units.sql` — now tracked properly
   via `schema_migrations` and applied automatically by `apply-migrations.sh` rather than a manual
   one-off step. Applied to Railway's live database and confirmed working there too, not just local.
+- **Fixed a real navigation bug**: all four "Reports" sidebar links (under Inventory, Sales,
+  Accounts, Courier) pointed to the identical URL with a hardcoded `active="inventory-reports"`,
+  so clicking any of them always highlighted the same sidebar item and opened the same tab,
+  regardless of which section you came from. Now each link carries `?tab=X&from=Y` query params;
+  the Reports page reads them server-side and passes the right initial tab + correct nav-highlight
+  key through. Verified for real: fetched all 4 URLs, confirmed each one server-renders its
+  correct tab as visually active AND highlights its own distinct sidebar link — not just "should
+  work," actually checked the rendered HTML's styling for both.
+- Added a genuine 5th Reports tab, **Courier Summary** (outstanding balance, order/delivered/
+  returned counts per courier) — closes a real content gap, since Courier Reports previously had
+  no relevant tab to land on at all. Verified the outstanding balance matches the same number
+  already cross-checked elsewhere in this project (M&P: Rs 3,632.58).
 - Accounts ledger rows are now clickable → real View/Edit/Delete on any voucher
   (`/api/accounts/vouchers/[id]`, GET/PATCH/DELETE). Edit supports replacing the photo — verified
   the new upload genuinely overwrites the old one, not just added alongside it. Delete is FK-safe:

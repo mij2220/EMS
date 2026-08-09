@@ -93,6 +93,47 @@ export async function GET(req: NextRequest) {
     return { ...v, amount, delta, runningBalance: running };
   });
 
+  // ---- Courier Summary (live) — outstanding balance and order counts per courier ----
+  const couriersRaw = await db.selectFrom("couriers").select(["id", "name"]).where("tenantId", "=", tenantId).execute();
+  const courierSummary = await Promise.all(
+    couriersRaw.map(async (c) => {
+      const accountName = `Courier Receivable — ${c.name}`;
+      const balanceRow = await db
+        .selectFrom("vouchers")
+        .innerJoin("accounts as debit_acct", "debit_acct.id", "vouchers.debitAccountId")
+        .innerJoin("accounts as credit_acct", "credit_acct.id", "vouchers.creditAccountId")
+        .select(({ fn }) => [
+          fn
+            .sum<string>(
+              sql<number>`case when debit_acct.name = ${accountName} then vouchers.amount when credit_acct.name = ${accountName} then -vouchers.amount else 0 end`
+            )
+            .as("balance"),
+        ])
+        .where("vouchers.tenantId", "=", tenantId)
+        .executeTakeFirst();
+
+      const orderStats = await db
+        .selectFrom("orders")
+        .select(({ fn }) => [
+          fn.count<string>("id").as("orderCount"),
+          fn.count<string>(sql<string>`case when status = 'delivered' then 1 end`).as("deliveredCount"),
+          fn.count<string>(sql<string>`case when status = 'returned' then 1 end`).as("returnedCount"),
+        ])
+        .where("tenantId", "=", tenantId)
+        .where("courierId", "=", c.id)
+        .executeTakeFirst();
+
+      return {
+        courierId: c.id,
+        courierName: c.name,
+        outstandingBalance: Number(balanceRow?.balance ?? 0),
+        orderCount: Number(orderStats?.orderCount ?? 0),
+        deliveredCount: Number(orderStats?.deliveredCount ?? 0),
+        returnedCount: Number(orderStats?.returnedCount ?? 0),
+      };
+    })
+  );
+
   return NextResponse.json({
     stockValuation: { totalCostValue, totalRetailValue, topProducts },
     sales: {
@@ -102,5 +143,6 @@ export async function GET(req: NextRequest) {
     },
     profitLoss: { revenue, cogs, grossProfit: revenue - cogs, expenses, netProfit: revenue - cogs - expenses },
     dayBook,
+    courierSummary,
   });
 }

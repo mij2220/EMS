@@ -11,16 +11,16 @@ const CLAY = "#C9722A";
 const NAV_ITEMS: { key: string; label: string; icon: string; href: string; sub?: boolean }[] = [
   { key: "dashboard", label: "Dashboard", icon: "◧", href: "/dashboard" },
   { key: "inventory", label: "Inventory", icon: "▤", href: "/dashboard/inventory" },
-  { key: "inventory-reports", label: "Reports", icon: "▸", href: "/dashboard/reports", sub: true },
+  { key: "inventory-reports", label: "Reports", icon: "▸", href: "/dashboard/reports?tab=valuation&from=inventory-reports", sub: true },
   { key: "sales", label: "Sales & Delivery", icon: "↷", href: "/dashboard/sales" },
   { key: "customers", label: "Customers", icon: "▸", href: "/dashboard/customers", sub: true },
-  { key: "sales-reports", label: "Reports", icon: "▸", href: "/dashboard/reports", sub: true },
+  { key: "sales-reports", label: "Reports", icon: "▸", href: "/dashboard/reports?tab=sales&from=sales-reports", sub: true },
   { key: "accounts", label: "Accounts", icon: "₨", href: "/dashboard/accounts" },
   { key: "vendors", label: "Vendors", icon: "▸", href: "/dashboard/vendors", sub: true },
   { key: "employees", label: "Employees", icon: "▸", href: "/dashboard/employees", sub: true },
-  { key: "account-reports", label: "Reports", icon: "▸", href: "/dashboard/reports", sub: true },
+  { key: "account-reports", label: "Reports", icon: "▸", href: "/dashboard/reports?tab=pl&from=account-reports", sub: true },
   { key: "courier", label: "Courier", icon: "⛟", href: "/dashboard/courier" },
-  { key: "courier-reports", label: "Reports", icon: "▸", href: "/dashboard/reports", sub: true },
+  { key: "courier-reports", label: "Reports", icon: "▸", href: "/dashboard/reports?tab=courier&from=courier-reports", sub: true },
   { key: "admin", label: "Admin", icon: "⚙", href: "/dashboard/admin" },
 ];
 

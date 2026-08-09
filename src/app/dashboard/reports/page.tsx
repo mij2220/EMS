@@ -5,13 +5,21 @@ import { getSessionUser } from "@/lib/session-user";
 import { db } from "@/db";
 import ReportsClient from "./reports-client";
 
-export default async function ReportsPage() {
+export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ tab?: string; from?: string }> }) {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   const session = token ? verifySession(token) : null;
   if (!session) redirect("/login");
 
   const user = await getSessionUser(session);
+  const { tab, from } = await searchParams;
 
-  return <ReportsClient tenantName={user.tenantName} userInitial={user.name.charAt(0).toUpperCase()} />;
+  return (
+    <ReportsClient
+      tenantName={user.tenantName}
+      userInitial={user.name.charAt(0).toUpperCase()}
+      initialTab={tab}
+      activeNavKey={from ?? "inventory-reports"}
+    />
+  );
 }
