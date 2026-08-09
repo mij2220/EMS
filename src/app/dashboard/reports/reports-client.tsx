@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import AppShell from "@/components/app-shell";
 
 type StockValuation = { totalCostValue: number; totalRetailValue: number; topProducts: { title: string; onHand: number; costValue: number; retailValue: number }[] };
@@ -8,12 +9,14 @@ type Sales = { orderCount: number; grossSales: number; netSales: number };
 type ProfitLoss = { revenue: number; cogs: number; grossProfit: number; expenses: number; netProfit: number };
 type DayBookRow = { id: string; voucherDate: string; voucherType: string; reference: string | null; amount: number; delta: number; runningBalance: number };
 type CourierSummaryRow = { courierId: string; courierName: string; outstandingBalance: number; orderCount: number; deliveredCount: number; returnedCount: number };
+type PayableRow = { vendorId: string; vendorName: string; payableBalance: number; lastActivity: string | null };
+type ExpenseCategoryRow = { category: string; total: number };
 
 function fmtRs(n: number) {
   return "Rs " + Math.round(n).toLocaleString("en-US");
 }
 
-const VALID_TABS = ["valuation", "sales", "pl", "daybook", "courier"] as const;
+const VALID_TABS = ["valuation", "sales", "pl", "daybook", "courier", "payable", "expenses"] as const;
 type TabKey = (typeof VALID_TABS)[number];
 
 export default function ReportsClient({
@@ -27,6 +30,7 @@ export default function ReportsClient({
   initialTab?: string;
   activeNavKey: string;
 }) {
+  const router = useRouter();
   const startingTab: TabKey = VALID_TABS.includes(initialTab as TabKey) ? (initialTab as TabKey) : "valuation";
   const [tab, setTab] = useState<TabKey>(startingTab);
   const [valuation, setValuation] = useState<StockValuation | null>(null);
@@ -34,6 +38,8 @@ export default function ReportsClient({
   const [pl, setPl] = useState<ProfitLoss | null>(null);
   const [dayBook, setDayBook] = useState<DayBookRow[]>([]);
   const [courierSummary, setCourierSummary] = useState<CourierSummaryRow[]>([]);
+  const [payable, setPayable] = useState<PayableRow[]>([]);
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategoryRow[]>([]);
 
   useEffect(() => {
     fetch("/api/reports/summary")
@@ -44,6 +50,8 @@ export default function ReportsClient({
         setPl(d.profitLoss);
         setDayBook(d.dayBook ?? []);
         setCourierSummary(d.courierSummary ?? []);
+        setPayable(d.payable ?? []);
+        setExpenseCategories(d.expenseCategories ?? []);
       });
   }, []);
 
@@ -52,7 +60,9 @@ export default function ReportsClient({
     { key: "sales", label: "Sales Summary" },
     { key: "pl", label: "Profit & Loss" },
     { key: "daybook", label: "Daily Account Report" },
-    { key: "courier", label: "Courier Summary" },
+    { key: "courier", label: "Receivable" },
+    { key: "payable", label: "Payable" },
+    { key: "expenses", label: "Expense Breakdown" },
   ] as const;
 
   return (
@@ -206,7 +216,12 @@ export default function ReportsClient({
             </thead>
             <tbody>
               {courierSummary.map((c) => (
-                <tr key={c.courierId} style={{ borderTop: "1px solid var(--line)" }}>
+                <tr
+                  key={c.courierId}
+                  onClick={() => router.push(`/dashboard/courier/${c.courierId}`)}
+                  className="cursor-pointer hover:bg-slate-50"
+                  style={{ borderTop: "1px solid var(--line)" }}
+                >
                   <td className="px-4 py-3 font-medium">{c.courierName}</td>
                   <td className="px-4 py-3">{fmtRs(c.outstandingBalance)}</td>
                   <td className="px-4 py-3">{c.orderCount}</td>
@@ -224,7 +239,81 @@ export default function ReportsClient({
             </tbody>
           </table>
           <div className="px-4 py-3 text-xs" style={{ color: "var(--muted)", borderTop: "1px solid var(--line)" }}>
+            Click a courier to see exactly how its balance was built up — every dispatch credit and remittance debit, in order.
+          </div>
+          <div className="px-4 py-3 text-xs" style={{ color: "var(--muted)", borderTop: "1px solid var(--line)" }}>
             Outstanding Balance here should match each courier&apos;s balance on the Courier module&apos;s own detail page — same underlying vouchers, computed the same way.
+          </div>
+        </div>
+      )}
+
+      {tab === "payable" && (
+        <div className="mockup-card !p-0 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
+              <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
+                <th className="px-4 py-3">Vendor</th>
+                <th className="px-4 py-3">Payable Balance</th>
+                <th className="px-4 py-3">Last Activity</th>
+              </tr>
+            </thead>
+            <tbody>
+              {payable.map((p) => (
+                <tr
+                  key={p.vendorId}
+                  onClick={() => router.push(`/dashboard/vendors/${p.vendorId}`)}
+                  className="cursor-pointer hover:bg-slate-50"
+                  style={{ borderTop: "1px solid var(--line)" }}
+                >
+                  <td className="px-4 py-3 font-medium">{p.vendorName}</td>
+                  <td className="px-4 py-3">{fmtRs(p.payableBalance)}</td>
+                  <td className="px-4 py-3" style={{ color: "var(--muted)" }}>
+                    {p.lastActivity ? new Date(p.lastActivity).toLocaleDateString() : "No purchases yet"}
+                  </td>
+                </tr>
+              ))}
+              {payable.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="px-4 py-8 text-center" style={{ color: "var(--muted)" }}>
+                    No vendors set up yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          <div className="px-4 py-3 text-xs" style={{ color: "var(--muted)", borderTop: "1px solid var(--line)" }}>
+            Click a vendor to see exactly how its balance was built up — every purchase and payment, in order.
+          </div>
+        </div>
+      )}
+
+      {tab === "expenses" && (
+        <div className="mockup-card !p-0 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
+              <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
+                <th className="px-4 py-3">Category</th>
+                <th className="px-4 py-3">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {expenseCategories.map((c) => (
+                <tr key={c.category} style={{ borderTop: "1px solid var(--line)" }}>
+                  <td className="px-4 py-3 font-medium">{c.category}</td>
+                  <td className="px-4 py-3">{fmtRs(c.total)}</td>
+                </tr>
+              ))}
+              {expenseCategories.length === 0 && (
+                <tr>
+                  <td colSpan={2} className="px-4 py-8 text-center" style={{ color: "var(--muted)" }}>
+                    No expenses recorded yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          <div className="px-4 py-3 text-xs" style={{ color: "var(--muted)", borderTop: "1px solid var(--line)" }}>
+            Includes salary as its own category — matches the &quot;Expenses (incl. salary)&quot; line on the Profit &amp; Loss tab.
           </div>
         </div>
       )}

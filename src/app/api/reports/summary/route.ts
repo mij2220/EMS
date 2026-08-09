@@ -134,6 +134,46 @@ export async function GET(req: NextRequest) {
     })
   );
 
+  // ---- Payable (live) — outstanding balance per vendor ----
+  const vendorsRaw = await db.selectFrom("vendors").select(["id", "name"]).where("tenantId", "=", tenantId).execute();
+  const payable = await Promise.all(
+    vendorsRaw.map(async (v) => {
+      const accountName = `Vendor — ${v.name}`;
+      const row = await db
+        .selectFrom("vouchers")
+        .innerJoin("accounts as debit_acct", "debit_acct.id", "vouchers.debitAccountId")
+        .innerJoin("accounts as credit_acct", "credit_acct.id", "vouchers.creditAccountId")
+        .select(({ fn }) => [
+          fn
+            .sum<string>(
+              sql<number>`case when credit_acct.name = ${accountName} then vouchers.amount when debit_acct.name = ${accountName} then -vouchers.amount else 0 end`
+            )
+            .as("balance"),
+          fn.max<string>(sql<string>`case when credit_acct.name = ${accountName} or debit_acct.name = ${accountName} then vouchers.voucher_date::text end`).as("lastActivity"),
+        ])
+        .where("vouchers.tenantId", "=", tenantId)
+        .executeTakeFirst();
+
+      return { vendorId: v.id, vendorName: v.name, payableBalance: Number(row?.balance ?? 0), lastActivity: row?.lastActivity ?? null };
+    })
+  );
+
+  // ---- Expense Breakdown by category (live) — every expense-type account, including Salary ----
+  const expenseRows = await db
+    .selectFrom("vouchers")
+    .innerJoin("accounts as debit_acct", "debit_acct.id", "vouchers.debitAccountId")
+    .select(["debit_acct.name as category", "vouchers.amount"])
+    .where("vouchers.tenantId", "=", tenantId)
+    .where("debit_acct.type", "=", "expense")
+    .execute();
+  const expenseByCategory = new Map<string, number>();
+  for (const r of expenseRows) {
+    expenseByCategory.set(r.category, (expenseByCategory.get(r.category) ?? 0) + Number(r.amount));
+  }
+  const expenseCategories = [...expenseByCategory.entries()]
+    .map(([category, total]) => ({ category, total }))
+    .sort((a, b) => b.total - a.total);
+
   return NextResponse.json({
     stockValuation: { totalCostValue, totalRetailValue, topProducts },
     sales: {
@@ -144,5 +184,7 @@ export async function GET(req: NextRequest) {
     profitLoss: { revenue, cogs, grossProfit: revenue - cogs, expenses, netProfit: revenue - cogs - expenses },
     dayBook,
     courierSummary,
+    payable,
+    expenseCategories,
   });
 }

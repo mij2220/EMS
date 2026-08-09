@@ -44,6 +44,27 @@ don't reconstruct from memory or assumption.
   returned counts per courier) — closes a real content gap, since Courier Reports previously had
   no relevant tab to land on at all. Verified the outstanding balance matches the same number
   already cross-checked elsewhere in this project (M&P: Rs 3,632.58).
+- Added two more real Reports tabs: **Payable** (per-vendor balance, matches Accounts' Vendor
+  Payable KPI: Rs 32,000 verified) and **Expense Breakdown** (by category including Salary,
+  matches This Month's Expenses: Rs 34,400 verified). Both the Payable tab and the existing
+  Courier/Receivable tab now have real drill-down — clicking a row navigates to that vendor's or
+  courier's actual detail page (the same one already built and tested), showing the full ledger
+  history that explains how the balance was built up. Not a separate re-implementation of detail
+  views — genuinely reuses the same pages.
+- **Vendors and Employees now have full CRUD**, not just Create+Read: Edit (name/contact for
+  vendors, name/role/salary for employees) and safe Delete. Delete checks for real transaction
+  history first — a vendor/employee with any real vouchers against them gets a 409 and a message
+  pointing at Disable instead, rather than either silently corrupting the ledger or refusing with
+  no explanation. Disable/Enable is a simple status toggle, independent of delete.
+  **Real architecture wrinkle handled carefully:** vendors are linked to their vouchers by
+  *account name* (`Vendor — {name}`), not a foreign key — so renaming a vendor also renames the
+  underlying account, verified for real: renamed a vendor with an actual Rs 32,000 balance,
+  confirmed the SAME account row was updated (not duplicated) and the ledger stayed correctly
+  linked to the original voucher, with the historical reference text preserved exactly as it was
+  at the time of the original purchase. Employees are linked by reference-text matching instead;
+  renaming an employee does NOT rewrite past salary voucher references, which is correct
+  bookkeeping behavior — a historical record should reflect the name as it was, not be rewritten
+  after the fact.
 - Accounts ledger rows are now clickable → real View/Edit/Delete on any voucher
   (`/api/accounts/vouchers/[id]`, GET/PATCH/DELETE). Edit supports replacing the photo — verified
   the new upload genuinely overwrites the old one, not just added alongside it. Delete is FK-safe:

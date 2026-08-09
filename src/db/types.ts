@@ -107,6 +107,7 @@ export interface Employees {
   id: Generated<string>;
   name: string;
   role: string | null;
+  status: Generated<string>;
   tenantId: string;
   userId: string | null;
 }
@@ -227,6 +228,11 @@ export interface Roles {
   tenantId: string;
 }
 
+export interface SchemaMigrations {
+  appliedAt: Generated<Timestamp>;
+  filename: string;
+}
+
 export interface StockAdjustments {
   createdAt: Generated<Timestamp>;
   id: Generated<string>;
@@ -291,6 +297,7 @@ export interface Vendors {
   createdAt: Generated<Timestamp>;
   id: Generated<string>;
   name: string;
+  status: Generated<string>;
   tenantId: string;
 }
 
@@ -333,6 +340,7 @@ export interface DB {
   purchaseOrderLines: PurchaseOrderLines;
   purchaseOrders: PurchaseOrders;
   roles: Roles;
+  schemaMigrations: SchemaMigrations;
   stockAdjustments: StockAdjustments;
   tenants: Tenants;
   users: Users;

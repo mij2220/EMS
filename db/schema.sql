@@ -175,6 +175,7 @@ create table vendors (
   tenant_id     uuid not null references tenants(id),
   name          text not null,
   contact       text,
+  status        text not null default 'active',      -- 'active' | 'inactive' — inactive instead of deleted once a vendor has real transaction history
   created_at    timestamptz not null default now()
 );
 
@@ -235,6 +236,7 @@ create table employees (
   role            text,
   base_salary     numeric(12,2),
   advance_balance numeric(12,2) not null default 0,
+  status          text not null default 'active',      -- 'active' | 'inactive' — inactive instead of deleted once an employee has real transaction history
   user_id         uuid references users(id),           -- nullable: not every employee needs system login (SRD 15.4)
   created_at      timestamptz not null default now()
 );
