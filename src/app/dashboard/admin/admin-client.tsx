@@ -164,13 +164,21 @@ export default function AdminClient({ tenantName, userInitial }: { tenantName: s
               <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("name")}>
                 Name<SortArrow active={sortKey === "name"} dir={sortDir} />
               </th>
-              <th className="px-4 py-3">Email</th>
-              <th className="px-4 py-3">Role</th>
-              <th className="px-4 py-3">2FA</th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("email")}>
+                Email<SortArrow active={sortKey === "email"} dir={sortDir} />
+              </th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("roleName")}>
+                Role<SortArrow active={sortKey === "roleName"} dir={sortDir} />
+              </th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("twoFaEnabled")}>
+                2FA<SortArrow active={sortKey === "twoFaEnabled"} dir={sortDir} />
+              </th>
               <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("lastLoginAt")}>
                 Last Login<SortArrow active={sortKey === "lastLoginAt"} dir={sortDir} />
               </th>
-              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("status")}>
+                Status<SortArrow active={sortKey === "status"} dir={sortDir} />
+              </th>
             </tr>
           </thead>
           <tbody>

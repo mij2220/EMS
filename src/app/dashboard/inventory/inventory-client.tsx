@@ -69,12 +69,19 @@ export default function InventoryClient({
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return products.filter((p) => {
-      if (statusFilter && statusOf(p).label !== statusFilter) return false;
-      if (locationFilter && !p.locationNames.includes(locationFilter)) return false;
-      if (!q) return true;
-      return p.title.toLowerCase().includes(q) || p.handle.toLowerCase().includes(q);
-    });
+    return products
+      .filter((p) => {
+        if (statusFilter && statusOf(p).label !== statusFilter) return false;
+        if (locationFilter && !p.locationNames.includes(locationFilter)) return false;
+        if (!q) return true;
+        return p.title.toLowerCase().includes(q) || p.handle.toLowerCase().includes(q);
+      })
+      .map((p) => ({
+        ...p,
+        profitPerUnit: p.minPrice != null && p.minCost != null ? p.minPrice - p.minCost : null,
+        statusLabel: statusOf(p).label,
+        skuLabel: p.hasMissingSku ? "missing" : "assigned",
+      }));
   }, [products, search, statusFilter, locationFilter]);
 
   const { sorted, sortKey, sortDir, toggleSort } = useSortableTable(filtered, "title");
@@ -317,8 +324,12 @@ export default function InventoryClient({
                 <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("title")}>
                   Product<SortArrow active={sortKey === "title"} dir={sortDir} />
                 </th>
-                <th className="px-4 py-3">Variant</th>
-                <th className="px-4 py-3">SKU</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("variantCount")}>
+                  Variant<SortArrow active={sortKey === "variantCount"} dir={sortDir} />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("skuLabel")}>
+                  SKU<SortArrow active={sortKey === "skuLabel"} dir={sortDir} />
+                </th>
                 <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("minCost")}>
                   Cost<SortArrow active={sortKey === "minCost"} dir={sortDir} />
                 </th>
@@ -328,8 +339,12 @@ export default function InventoryClient({
                 <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("totalOnHand")}>
                   On Hand<SortArrow active={sortKey === "totalOnHand"} dir={sortDir} />
                 </th>
-                <th className="px-4 py-3">Profit / unit</th>
-                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("profitPerUnit")}>
+                  Profit / unit<SortArrow active={sortKey === "profitPerUnit"} dir={sortDir} />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("statusLabel")}>
+                  Status<SortArrow active={sortKey === "statusLabel"} dir={sortDir} />
+                </th>
               </tr>
             </thead>
             <tbody>

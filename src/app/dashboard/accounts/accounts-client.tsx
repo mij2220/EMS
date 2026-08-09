@@ -108,9 +108,15 @@ export default function AccountsClient({ tenantName, userInitial }: { tenantName
                 <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleVoucherSort("voucherType")}>
                   Voucher<SortArrow active={voucherSortKey === "voucherType"} dir={voucherSortDir} />
                 </th>
-                <th className="px-4 py-3">Reference</th>
-                <th className="px-4 py-3">Debit</th>
-                <th className="px-4 py-3">Credit</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleVoucherSort("reference")}>
+                  Reference<SortArrow active={voucherSortKey === "reference"} dir={voucherSortDir} />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleVoucherSort("debitAccountName")}>
+                  Debit<SortArrow active={voucherSortKey === "debitAccountName"} dir={voucherSortDir} />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleVoucherSort("creditAccountName")}>
+                  Credit<SortArrow active={voucherSortKey === "creditAccountName"} dir={voucherSortDir} />
+                </th>
                 <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleVoucherSort("amount")}>
                   Amount<SortArrow active={voucherSortKey === "amount"} dir={voucherSortDir} />
                 </th>

@@ -43,7 +43,9 @@ export default function EmployeeDetailClient({ employeeId, tenantName, userIniti
               <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("voucherDate")}>
                 Date<SortArrow active={sortKey === "voucherDate"} dir={sortDir} />
               </th>
-              <th className="px-4 py-3">Reference</th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("reference")}>
+                Reference<SortArrow active={sortKey === "reference"} dir={sortDir} />
+              </th>
               <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("amount")}>
                 Amount<SortArrow active={sortKey === "amount"} dir={sortDir} />
               </th>

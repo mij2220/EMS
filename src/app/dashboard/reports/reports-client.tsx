@@ -218,9 +218,15 @@ export default function ReportsClient({
                 <th className="px-4 py-3 cursor-pointer select-none" onClick={() => courierSort.toggleSort("outstandingBalance")}>
                   Outstanding Balance<SortArrow active={courierSort.sortKey === "outstandingBalance"} dir={courierSort.sortDir} />
                 </th>
-                <th className="px-4 py-3">Orders</th>
-                <th className="px-4 py-3">Delivered</th>
-                <th className="px-4 py-3">Returned</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => courierSort.toggleSort("orderCount")}>
+                  Orders<SortArrow active={courierSort.sortKey === "orderCount"} dir={courierSort.sortDir} />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => courierSort.toggleSort("deliveredCount")}>
+                  Delivered<SortArrow active={courierSort.sortKey === "deliveredCount"} dir={courierSort.sortDir} />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => courierSort.toggleSort("returnedCount")}>
+                  Returned<SortArrow active={courierSort.sortKey === "returnedCount"} dir={courierSort.sortDir} />
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -267,7 +273,9 @@ export default function ReportsClient({
                 <th className="px-4 py-3 cursor-pointer select-none" onClick={() => payableSort.toggleSort("payableBalance")}>
                   Payable Balance<SortArrow active={payableSort.sortKey === "payableBalance"} dir={payableSort.sortDir} />
                 </th>
-                <th className="px-4 py-3">Last Activity</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => payableSort.toggleSort("lastActivity")}>
+                  Last Activity<SortArrow active={payableSort.sortKey === "lastActivity"} dir={payableSort.sortDir} />
+                </th>
               </tr>
             </thead>
             <tbody>

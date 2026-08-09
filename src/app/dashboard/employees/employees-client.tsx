@@ -120,12 +120,18 @@ export default function EmployeesClient({ tenantName, userInitial }: { tenantNam
               <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("name")}>
                 Name<SortArrow active={sortKey === "name"} dir={sortDir} />
               </th>
-              <th className="px-4 py-3">Role</th>
-              <th className="px-4 py-3">Last Payment</th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("role")}>
+                Role<SortArrow active={sortKey === "role"} dir={sortDir} />
+              </th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("lastPaymentDate")}>
+                Last Payment<SortArrow active={sortKey === "lastPaymentDate"} dir={sortDir} />
+              </th>
               <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("advanceBalance")}>
                 Advance Balance<SortArrow active={sortKey === "advanceBalance"} dir={sortDir} />
               </th>
-              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("status")}>
+                Status<SortArrow active={sortKey === "status"} dir={sortDir} />
+              </th>
               <th className="px-4 py-3">Actions</th>
             </tr>
           </thead>

@@ -29,15 +29,21 @@ export default function CustomersClient({ tenantName, userInitial }: { tenantNam
               <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("name")}>
                 Name<SortArrow active={sortKey === "name"} dir={sortDir} />
               </th>
-              <th className="px-4 py-3">Phone</th>
-              <th className="px-4 py-3">City</th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("phone")}>
+                Phone<SortArrow active={sortKey === "phone"} dir={sortDir} />
+              </th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("city")}>
+                City<SortArrow active={sortKey === "city"} dir={sortDir} />
+              </th>
               <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("orderCount")}>
                 Orders<SortArrow active={sortKey === "orderCount"} dir={sortDir} />
               </th>
               <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("lifetimeValue")}>
                 Lifetime Value<SortArrow active={sortKey === "lifetimeValue"} dir={sortDir} />
               </th>
-              <th className="px-4 py-3">Returns</th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("returnCount")}>
+                Returns<SortArrow active={sortKey === "returnCount"} dir={sortDir} />
+              </th>
             </tr>
           </thead>
           <tbody>

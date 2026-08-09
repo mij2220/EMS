@@ -173,8 +173,12 @@ export default function ProductDetailClient({
           <table className="w-full text-sm min-w-[800px]">
             <thead style={{ background: "var(--paper)" }}>
               <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
-                <th className="px-4 py-2">Variant</th>
-                <th className="px-4 py-2">SKU</th>
+                <th className="px-4 py-2 cursor-pointer select-none" onClick={() => toggleSort("option1Value")}>
+                  Variant<SortArrow active={sortKey === "option1Value"} dir={sortDir} />
+                </th>
+                <th className="px-4 py-2 cursor-pointer select-none" onClick={() => toggleSort("sku")}>
+                  SKU<SortArrow active={sortKey === "sku"} dir={sortDir} />
+                </th>
                 <th className="px-4 py-2 cursor-pointer select-none" onClick={() => toggleSort("costPrice")}>
                   Cost<SortArrow active={sortKey === "costPrice"} dir={sortDir} />
                 </th>
@@ -184,7 +188,9 @@ export default function ProductDetailClient({
                 <th className="px-4 py-2 cursor-pointer select-none" onClick={() => toggleSort("onHand")}>
                   On Hand<SortArrow active={sortKey === "onHand"} dir={sortDir} />
                 </th>
-                <th className="px-4 py-2">Reorder</th>
+                <th className="px-4 py-2 cursor-pointer select-none" onClick={() => toggleSort("reorderLevel")}>
+                  Reorder<SortArrow active={sortKey === "reorderLevel"} dir={sortDir} />
+                </th>
                 <th className="px-4 py-2"></th>
               </tr>
             </thead>

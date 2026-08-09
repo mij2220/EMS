@@ -111,12 +111,18 @@ export default function VendorsClient({ tenantName, userInitial }: { tenantName:
               <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("name")}>
                 Vendor<SortArrow active={sortKey === "name"} dir={sortDir} />
               </th>
-              <th className="px-4 py-3">Contact</th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("contact")}>
+                Contact<SortArrow active={sortKey === "contact"} dir={sortDir} />
+              </th>
               <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("payableBalance")}>
                 Payable Balance<SortArrow active={sortKey === "payableBalance"} dir={sortDir} />
               </th>
-              <th className="px-4 py-3">Last Activity</th>
-              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("lastActivity")}>
+                Last Activity<SortArrow active={sortKey === "lastActivity"} dir={sortDir} />
+              </th>
+              <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("status")}>
+                Status<SortArrow active={sortKey === "status"} dir={sortDir} />
+              </th>
               <th className="px-4 py-3">Actions</th>
             </tr>
           </thead>

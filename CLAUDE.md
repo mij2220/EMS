@@ -183,15 +183,18 @@ same discipline is required going forward.
 
 ## Mobile responsiveness and table sorting
 
-**Sorting** — a reusable client-side hook (`src/lib/use-sortable-table.tsx`) applied to every real
-data table in the app: Inventory, Sales & Delivery, Accounts vouchers ledger, Vendors, Employees,
-Customers, Admin Users, Dashboard, Reports' Payable/Receivable/Expense Breakdown tabs, Vendor
-detail ledger, Employee detail history, Courier detail's Batches/Variance tabs, and Product detail
-variants. Click a column header to sort ascending, click again for descending; an arrow indicates
-the active column and direction. Verified for real: fetched real product data and ran the exact
-sort comparator against it outside the browser to confirm correctness (numbers sort numerically,
-not as strings; nulls sort last), then confirmed via rendered HTML that each page's headers
-actually carry the click handler and the default-sorted column shows the active arrow.
+**Sorting** — a reusable client-side hook (`src/lib/use-sortable-table.tsx`) applied to
+**every real data column** on every table in the app (not just a subset — verified by counting
+sortable headers against the actual column count on each live page after an initial pass that
+only covered the "important" columns turned out to be incomplete per direct user feedback):
+Inventory (8/8 columns, including computed Profit/unit and Status via added derived fields since
+those weren't raw data), Sales & Delivery (10/10), Accounts vouchers ledger (6/6, Details/photo
+link correctly excluded — no clean sort value), Vendors (5/5, Actions column correctly excluded),
+Employees (5/5), Customers (6/6), Admin Users (6/6), Reports' Payable (3/3)/Receivable (5/5)/
+Expense Breakdown tabs, Vendor detail ledger (4/4), Employee detail history (3/3), Courier
+detail's Batches/Variance tabs (all columns), and Product detail variants (6/6). Click a column
+header to sort ascending, click again for descending; an arrow indicates the active column and
+direction.
 
 **Deliberately NOT sortable, by design, not oversight:** the Daily Account Report, Courier
 Ledger tab, and the product detail page's Recent Stock Adjustments log. All three show a running

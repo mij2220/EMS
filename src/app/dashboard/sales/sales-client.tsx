@@ -173,16 +173,24 @@ export default function SalesClient({ tenantName, userInitial }: { tenantName: s
                 <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("customerName")}>
                   Customer / City<SortArrow active={sortKey === "customerName"} dir={sortDir} />
                 </th>
-                <th className="px-4 py-3">Items</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("itemCount")}>
+                  Items<SortArrow active={sortKey === "itemCount"} dir={sortDir} />
+                </th>
                 <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("amount")}>
                   Amount<SortArrow active={sortKey === "amount"} dir={sortDir} />
                 </th>
                 <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("profit")}>
                   Profit<SortArrow active={sortKey === "profit"} dir={sortDir} />
                 </th>
-                <th className="px-4 py-3">Payment</th>
-                <th className="px-4 py-3">Courier / Tracking #</th>
-                <th className="px-4 py-3">Source</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("paymentType")}>
+                  Payment<SortArrow active={sortKey === "paymentType"} dir={sortDir} />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("courierName")}>
+                  Courier / Tracking #<SortArrow active={sortKey === "courierName"} dir={sortDir} />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("source")}>
+                  Source<SortArrow active={sortKey === "source"} dir={sortDir} />
+                </th>
                 <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("status")}>
                   Status<SortArrow active={sortKey === "status"} dir={sortDir} />
                 </th>

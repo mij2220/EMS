@@ -127,14 +127,18 @@ export default function CourierDetailClient({ courierId, tenantName, userInitial
           <table className="w-full text-sm">
             <thead style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
               <tr className="text-left text-xs font-bold uppercase" style={{ color: "var(--muted)" }}>
-                <th className="px-4 py-3">Batch</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => batchSort.toggleSort("batchNumber")}>
+                  Batch<SortArrow active={batchSort.sortKey === "batchNumber"} dir={batchSort.sortDir} />
+                </th>
                 <th className="px-4 py-3 cursor-pointer select-none" onClick={() => batchSort.toggleSort("createdAt")}>
                   Date<SortArrow active={batchSort.sortKey === "createdAt"} dir={batchSort.sortDir} />
                 </th>
                 <th className="px-4 py-3 cursor-pointer select-none" onClick={() => batchSort.toggleSort("amount")}>
                   Amount<SortArrow active={batchSort.sortKey === "amount"} dir={batchSort.sortDir} />
                 </th>
-                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => batchSort.toggleSort("status")}>
+                  Status<SortArrow active={batchSort.sortKey === "status"} dir={batchSort.sortDir} />
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -168,12 +172,18 @@ export default function CourierDetailClient({ courierId, tenantName, userInitial
                 <th className="px-4 py-3 cursor-pointer select-none" onClick={() => varianceSort.toggleSort("orderNumber")}>
                   Order<SortArrow active={varianceSort.sortKey === "orderNumber"} dir={varianceSort.sortDir} />
                 </th>
-                <th className="px-4 py-3">Consignee / City</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => varianceSort.toggleSort("customerName")}>
+                  Consignee / City<SortArrow active={varianceSort.sortKey === "customerName"} dir={varianceSort.sortDir} />
+                </th>
                 <th className="px-4 py-3 cursor-pointer select-none" onClick={() => varianceSort.toggleSort("slipAmount")}>
                   Slip Amount<SortArrow active={varianceSort.sortKey === "slipAmount"} dir={varianceSort.sortDir} />
                 </th>
-                <th className="px-4 py-3">Remitted</th>
-                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => varianceSort.toggleSort("remittedAmount")}>
+                  Remitted<SortArrow active={varianceSort.sortKey === "remittedAmount"} dir={varianceSort.sortDir} />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none" onClick={() => varianceSort.toggleSort("status")}>
+                  Status<SortArrow active={varianceSort.sortKey === "status"} dir={varianceSort.sortDir} />
+                </th>
               </tr>
             </thead>
             <tbody>
