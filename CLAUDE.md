@@ -215,6 +215,46 @@ redesign — this is a deliberate scope decision given the number of tables invo
 something skipped by accident. If a fully mobile-native table layout (cards instead of horizontal
 scroll) is wanted for specific high-traffic tables, that's a larger follow-up, not done here.
 
+## Real cash/credit/split accounting, added per user request — no migration needed
+
+**Vendor Purchase now supports Cash / Bank / Credit / Split payment**, not just always-credit like
+before. Credit is unchanged (Debit Inventory, Credit Vendor Payable — full amount). Cash/Bank
+skips the payable account entirely (Debit Inventory, Credit Cash/Bank — nothing owed). Split
+creates two linked vouchers in one transaction: the full purchase as payable, then an immediate
+partial payment against it — verified for real: a Rs 10,000 split with Rs 4,000 cash now landed
+the vendor's payable at exactly Rs 6,000, not Rs 10,000 or Rs 4,000.
+
+**A real bug this surfaced, not something guessed at:** `nextVoucherNumber` and
+`findOrCreateAccount` (`src/lib/accounts-helpers.ts`) always used the outer `db` connection, never
+the transaction (`trx`) passed into `db.transaction().execute(...)`. Fine when a route only
+inserts one voucher, but the split-payment case inserts two within the same transaction — both
+calls to `nextVoucherNumber` read the same stale count (neither could see the other's
+not-yet-committed insert), so they generated the same "next" number and collided on the unique
+constraint. Fixed by making both helpers accept an optional Kysely connection, defaulting to
+`db` but overridable with `trx`. **If you add any future route that inserts more than one voucher
+inside a single `db.transaction()`, pass `trx` to these helpers — this is exactly the bug that
+will recur otherwise, and it will not show up until two inserts happen in the same transaction.**
+
+**"Record Payment" on the Vendor detail page** — pays down an existing payable *after* the fact,
+not just at the moment of purchase (Debit Vendor Payable, Credit Cash/Bank). Tested: a Rs 10,000
+payment against a Rs 32,000 balance correctly landed at Rs 22,000.
+
+**"+ Employee Advance/Commission" on Accounts** — an advance increments `employees.advance_balance`
+(a column that already existed in the schema, unused until now) and debits a new "Staff Advances"
+asset account; a commission is a straight expense and does NOT touch `advance_balance`. Tested
+both paths independently to confirm the balance only moves for advances, not commissions.
+
+**"+ Customer Refund" on Accounts** — debits a new "Customer Refunds" expense-type account,
+credits Cash/Bank. Verified it correctly shows up as its own line in Reports' Expense Breakdown
+tab alongside Salary/Commission/other expense categories, proving it flows through the same real
+aggregation, not a separate hardcoded path.
+
+**No schema migration was needed for any of this** — `accounts.type` and `vouchers.voucher_type`
+are both plain `text` columns with no CHECK constraint (confirmed by reading schema.sql directly
+before assuming), so new values like `"asset"`, `"vendor_payment"`, `"employee_advance"`,
+`"commission"`, `"customer_refund"` are just data, not schema changes. `advance_balance` already
+existed. Deploying this round is pure code — no `db/migrations/` file, no migration prompt needed.
+
 ## Shopify integration — in progress, credentials layer done, sync itself not started
 
 `Admin` page now has a real "Connect Shopify" flow: store URL + Admin API access token, encrypted

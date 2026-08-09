@@ -25,6 +25,7 @@ type Kpis = { cash: number; vendorPayable: number; courierReceivable: number; mo
 type Account = { id: string; name: string; type: string };
 type Vendor = { id: string; name: string };
 type Employee = { id: string; name: string };
+type Customer = { id: string; name: string };
 
 function fmtRs(n: number) {
   return "Rs " + Math.round(n).toLocaleString("en-US");
@@ -37,22 +38,25 @@ export default function AccountsClient({ tenantName, userInitial }: { tenantName
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [modal, setModal] = useState<null | "expense" | "salary" | "vendor" | "voucher">(null);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [modal, setModal] = useState<null | "expense" | "salary" | "vendor" | "voucher" | "employeePayment" | "customerRefund">(null);
   const [selectedVoucherId, setSelectedVoucherId] = useState<string | null>(null);
 
   const loadAll = useCallback(async () => {
-    const [k, v, a, ve, em] = await Promise.all([
+    const [k, v, a, ve, em, cu] = await Promise.all([
       fetch("/api/accounts/kpis").then((r) => r.json()),
       fetch("/api/accounts/vouchers").then((r) => r.json()),
       fetch("/api/accounts/accounts-list").then((r) => r.json()),
       fetch("/api/vendors").then((r) => r.json()),
       fetch("/api/employees").then((r) => r.json()),
+      fetch("/api/customers").then((r) => r.json()),
     ]);
     setKpis(k);
     setVouchers(v.vouchers ?? []);
     setAccounts(a.accounts ?? []);
     setVendors(ve.vendors ?? []);
     setEmployees(em.employees ?? []);
+    setCustomers(cu.customers ?? []);
   }, []);
 
   useEffect(() => {
@@ -91,6 +95,12 @@ export default function AccountsClient({ tenantName, userInitial }: { tenantName
         </button>
         <button onClick={() => setModal("vendor")} className="mockup-btn mockup-btn-ghost">
           + Vendor Purchase
+        </button>
+        <button onClick={() => setModal("employeePayment")} className="mockup-btn mockup-btn-ghost">
+          + Employee Advance/Commission
+        </button>
+        <button onClick={() => setModal("customerRefund")} className="mockup-btn mockup-btn-ghost">
+          + Customer Refund
         </button>
         <button onClick={() => setModal("voucher")} className="mockup-btn mockup-btn-primary">
           + New Voucher
@@ -169,6 +179,8 @@ export default function AccountsClient({ tenantName, userInitial }: { tenantName
       {modal === "expense" && <ExpenseModal onClose={() => setModal(null)} onSaved={loadAll} />}
       {modal === "salary" && <SalaryModal employees={employees} onClose={() => setModal(null)} onSaved={loadAll} />}
       {modal === "vendor" && <VendorPurchaseModal vendors={vendors} onClose={() => setModal(null)} onSaved={loadAll} />}
+      {modal === "employeePayment" && <EmployeePaymentModal employees={employees} onClose={() => setModal(null)} onSaved={loadAll} />}
+      {modal === "customerRefund" && <CustomerRefundModal customers={customers} onClose={() => setModal(null)} onSaved={loadAll} />}
       {modal === "voucher" && <NewVoucherModal accounts={accounts} onClose={() => setModal(null)} onSaved={loadAll} />}
       {selectedVoucherId && (
         <VoucherDetailModal voucherId={selectedVoucherId} onClose={() => setSelectedVoucherId(null)} onChanged={loadAll} />
@@ -315,6 +327,7 @@ function VendorPurchaseModal({ vendors, onClose, onSaved }: { vendors: Vendor[];
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState("credit");
   const today = new Date().toISOString().slice(0, 10);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -395,6 +408,37 @@ function VendorPurchaseModal({ vendors, onClose, onSaved }: { vendors: Vendor[];
           <label className="block text-xs font-semibold mb-1">Total Amount (Rs)</label>
           <input name="amount" type="number" step="0.01" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
         </div>
+        <div>
+          <label className="block text-xs font-semibold mb-1">Payment</label>
+          <select
+            name="paymentMethod"
+            value={paymentMethod}
+            onChange={(e) => setPaymentMethod(e.target.value)}
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            style={{ borderColor: "var(--line)" }}
+          >
+            <option value="credit">Credit — nothing paid now, full amount owed to vendor</option>
+            <option value="cash">Cash — paid in full right now</option>
+            <option value="bank">Bank — paid in full right now</option>
+            <option value="split">Split — some cash now, rest on credit</option>
+          </select>
+        </div>
+        {paymentMethod === "split" && (
+          <div>
+            <label className="block text-xs font-semibold mb-1">Cash Paid Now (Rs)</label>
+            <input
+              name="cashPaidNow"
+              type="number"
+              step="0.01"
+              placeholder="Must be less than the total amount"
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              style={{ borderColor: "var(--line)" }}
+            />
+            <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
+              The rest is added to the vendor&apos;s payable balance.
+            </p>
+          </div>
+        )}
         <div>
           <label className="block text-xs font-semibold mb-1">Voucher Photo</label>
           <input name="photo" type="file" accept="image/*" onChange={handlePhotoChange} className="w-full text-sm" />
@@ -497,6 +541,152 @@ type VoucherDetail = {
   enteredByName: string;
   hasPhoto: boolean;
 };
+
+function EmployeePaymentModal({ employees, onClose, onSaved }: { employees: Employee[]; onClose: () => void; onSaved: () => void }) {
+  const [type, setType] = useState<"advance" | "commission">("advance");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setSaving(true);
+    const f = new FormData(e.currentTarget);
+    try {
+      const res = await fetch("/api/accounts/vouchers/employee-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId: f.get("employeeId"), type, note: f.get("note"), amount: f.get("amount"), paidFrom: f.get("paidFrom") }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Something went wrong.");
+        return;
+      }
+      onSaved();
+      onClose();
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <ModalShell title="Employee Advance / Commission" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <label className="block text-xs font-semibold mb-1">Type</label>
+          <select value={type} onChange={(e) => setType(e.target.value as "advance" | "commission")} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }}>
+            <option value="advance">Advance — money the employee owes back</option>
+            <option value="commission">Commission — a real payout, not owed back</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold mb-1">Employee</label>
+          <select name="employeeId" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }}>
+            {employees.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold mb-1">Note</label>
+          <input name="note" placeholder="Optional — e.g. reason or period" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold mb-1">Amount (Rs)</label>
+            <input name="amount" type="number" step="0.01" required className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1">Paid From</label>
+            <select name="paidFrom" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }}>
+              <option>Cash</option>
+              <option>Bank</option>
+            </select>
+          </div>
+        </div>
+        {error && <div className="text-sm rounded-lg px-3 py-2" style={{ background: "var(--bad-bg)", color: "var(--bad)" }}>{error}</div>}
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="mockup-btn mockup-btn-ghost">Cancel</button>
+          <button type="submit" disabled={saving} className="mockup-btn mockup-btn-primary disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
+function CustomerRefundModal({ customers, onClose, onSaved }: { customers: Customer[]; onClose: () => void; onSaved: () => void }) {
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setSaving(true);
+    const f = new FormData(e.currentTarget);
+    try {
+      const res = await fetch("/api/accounts/vouchers/customer-refund", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerId: f.get("customerId"), reason: f.get("reason"), amount: f.get("amount"), paidFrom: f.get("paidFrom") }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Something went wrong.");
+        return;
+      }
+      onSaved();
+      onClose();
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <ModalShell title="Customer Refund" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <label className="block text-xs font-semibold mb-1">Customer</label>
+          <select name="customerId" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }}>
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold mb-1">Reason</label>
+          <input name="reason" placeholder="e.g. Defective item returned" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold mb-1">Amount (Rs)</label>
+            <input name="amount" type="number" step="0.01" required className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1">Paid From</label>
+            <select name="paidFrom" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }}>
+              <option>Cash</option>
+              <option>Bank</option>
+            </select>
+          </div>
+        </div>
+        {error && <div className="text-sm rounded-lg px-3 py-2" style={{ background: "var(--bad-bg)", color: "var(--bad)" }}>{error}</div>}
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="mockup-btn mockup-btn-ghost">Cancel</button>
+          <button type="submit" disabled={saving} className="mockup-btn mockup-btn-primary disabled:opacity-50">{saving ? "Saving…" : "Save Refund"}</button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
 
 function VoucherDetailModal({ voucherId, onClose, onChanged }: { voucherId: string; onClose: () => void; onChanged: () => void }) {
   const [voucher, setVoucher] = useState<VoucherDetail | null>(null);
