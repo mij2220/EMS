@@ -255,6 +255,18 @@ before assuming), so new values like `"asset"`, `"vendor_payment"`, `"employee_a
 `"commission"`, `"customer_refund"` are just data, not schema changes. `advance_balance` already
 existed. Deploying this round is pure code — no `db/migrations/` file, no migration prompt needed.
 
+## Real bug fixed: voucher photo was wrongly required on edit
+
+Editing a voucher without selecting a new photo was being rejected with "That file doesn't look
+like an image" — caused by `if (photo && typeof photo !== "string")` not accounting for the fact
+that browsers submit an empty zero-byte `File` object for an untouched file input inside a
+submitted form, not `null`. Fixed in both the edit route (`vouchers/[id]/route.ts`) and the create
+route (`vendor-purchase/route.ts`, same latent bug, same fix) by adding `photo.size > 0` to the
+condition. Verified two ways: (1) reproduced the exact bug by uploading a genuine 0-byte file via
+curl, confirmed 200 instead of the rejection, (2) the more important case — created a voucher with
+a real photo, edited a different field without touching the photo input at all, confirmed the
+original photo survives byte-for-byte, not silently wiped.
+
 ## Shopify integration — in progress, credentials layer done, sync itself not started
 
 `Admin` page now has a real "Connect Shopify" flow: store URL + Admin API access token, encrypted
@@ -273,7 +285,26 @@ deployment.
 are NOT built yet** — this only covers connecting and verifying credentials. The Inventory page's
 Sync/Push buttons stay disabled regardless of connection status until that's built.
 
-### Live debugging in progress — Shopify Test Connection returning 401
+### RESOLVED — Test Connection now succeeds against the real store
+
+The 401 issue above is resolved. Confirmed via the user's live screenshot: `aimexa.myshopify.com`,
+status "connected", "Connected — Shopify confirmed the store as 'Aimexa'." The root cause was
+never definitively pinned down in this chat (most likely theory was `shpss_` vs `shpat_` token
+confusion, per the debugging notes below, kept for reference) — the user resolved it independently
+between sessions, most likely by using the correct `shpat_` Admin API access token. **Don't assume
+the theory below is what actually fixed it** — it's preserved as debugging history, not a
+confirmed root cause.
+
+**What this unlocks:** the credentials layer is now proven to work against a real store, not just
+in theory. The natural next step is building the actual Sync (pull products from Shopify) and
+Push (send price/stock changes to Shopify) functionality — still NOT built as of this note. The
+Inventory page's Sync/Push buttons are correctly still disabled (by design, not a bug) since that
+work hasn't started. If picking this up, this is now unblocked and ready to build for real against
+the user's actual connected store — a first for this feature, everything before now was
+built without any way to verify against a live Shopify account.
+
+<details>
+<summary>Preserved debugging history from when this was returning 401 (click to expand)</summary>
 
 The credentials/encryption/API-call code has now been exercised against the user's real store
 twice, both times returning a genuine `401` from Shopify itself (confirmed via a direct `curl`
@@ -287,18 +318,14 @@ secret key** instead of the `shpat_...` **Admin API access token** — these are
 fields on the same "API credentials" page in a Shopify custom app, easy to conflate, and only the
 `shpat_` one authenticates API calls like this. One token the user pasted in chat did start with
 `shpss_` before being caught — strong evidence for this theory, though not yet proven since a
-correct `shpat_` token hasn't been tested yet (the curl attempt with it failed on a shell syntax
-issue — multi-line backslash continuation broke in zsh with blank lines in between — not
-re-attempted successfully as of this note).
+correct `shpat_` token hadn't been tested yet as of when this was written.
 
-**Two other domains have been tried** (`f0yg1v-9t.myshopify.com` and `aimexa.myshopify.com`) —
-worth confirming which one is actually correct by having the user check Settings → Domains or the
-browser URL while logged into `admin.shopify.com` directly, rather than guessing.
+**Two other domains were tried** (`f0yg1v-9t.myshopify.com` and `aimexa.myshopify.com`) — the
+correct one turned out to be `aimexa.myshopify.com`, confirmed by the eventual successful connection.
 
-**Next step if picking this up fresh:** ask the user to look at their Shopify app's API
-credentials page and describe exactly what fields/labels are there (or send a screenshot with the
-actual secret values still masked/hidden), to confirm which credential is the right one before
-trying again. A token was leaked in the chat during this debugging session and should be treated
-as compromised — the user was told to regenerate it in Shopify Admin; unconfirmed whether they
-have yet. (Deliberately not repeating the leaked value here — GitHub's push protection correctly
-flagged an earlier version of this file for containing it literally; don't reintroduce that.)
+A token was leaked in the chat during this debugging session and should be treated as
+compromised — the user was told to regenerate it in Shopify Admin. (Deliberately not repeating
+the leaked value here — GitHub's push protection correctly flagged an earlier version of this
+file for containing it literally; don't reintroduce that.)
+
+</details>

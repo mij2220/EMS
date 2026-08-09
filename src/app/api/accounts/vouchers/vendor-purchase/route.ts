@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
 
   let photoData: Buffer | null = null;
   let photoMimeType: string | null = null;
-  if (photo && typeof photo !== "string") {
+  if (photo && typeof photo !== "string" && photo.size > 0) {
     if (photo.size > MAX_PHOTO_BYTES) {
       return NextResponse.json({ error: "Photo is too large — please keep it under 5MB." }, { status: 400 });
     }

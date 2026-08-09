@@ -94,7 +94,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (totalUnitsRaw !== undefined) updates.totalUnits = totalUnits != null ? totalUnits.toString() : null;
   if (amount != null) updates.amount = amount.toString();
 
-  if (photo && typeof photo !== "string") {
+  if (photo && typeof photo !== "string" && photo.size > 0) {
     if (photo.size > MAX_PHOTO_BYTES) {
       return NextResponse.json({ error: "Photo is too large — please keep it under 5MB." }, { status: 400 });
     }
