@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import AppShell from "@/components/app-shell";
 import { useSortableTable, SortArrow } from "@/lib/use-sortable-table";
+import { usePagination, PaginationControls } from "@/lib/use-pagination";
 
 type User = {
   id: string;
@@ -25,7 +26,14 @@ type Integration = {
 
 export default function AdminClient({ tenantName, userInitial }: { tenantName: string; userInitial: string }) {
   const [users, setUsers] = useState<User[]>([]);
-  const { sorted, sortKey, sortDir, toggleSort } = useSortableTable(users, "name");
+  const [userSearch, setUserSearch] = useState("");
+  const filteredUsers = users.filter((u) => {
+    const q = userSearch.trim().toLowerCase();
+    if (!q) return true;
+    return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.roleName.toLowerCase().includes(q);
+  });
+  const { sorted, sortKey, sortDir, toggleSort } = useSortableTable(filteredUsers, "name");
+  const { paged, page, setPage, pageCount, pageSize, total } = usePagination(sorted, 20);
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [showShopifyForm, setShowShopifyForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -157,6 +165,16 @@ export default function AdminClient({ tenantName, userInitial }: { tenantName: s
       </div>
 
       <h2 className="text-lg font-bold mb-3">Users</h2>
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="Search name, email, or role…"
+          value={userSearch}
+          onChange={(e) => setUserSearch(e.target.value)}
+          className="w-64 rounded-lg border px-3 py-2 text-sm"
+          style={{ borderColor: "var(--line)" }}
+        />
+      </div>
       <div className="mockup-card !p-0 overflow-hidden">
         <table className="w-full text-sm">
           <thead style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
@@ -182,7 +200,7 @@ export default function AdminClient({ tenantName, userInitial }: { tenantName: s
             </tr>
           </thead>
           <tbody>
-            {sorted.map((u) => (
+            {paged.map((u) => (
               <tr key={u.id} style={{ borderTop: "1px solid var(--line)" }}>
                 <td className="px-4 py-3 font-medium">{u.name}</td>
                 <td className="px-4 py-3" style={{ color: "var(--muted)" }}>
@@ -202,6 +220,7 @@ export default function AdminClient({ tenantName, userInitial }: { tenantName: s
             ))}
           </tbody>
         </table>
+        <PaginationControls page={page} pageCount={pageCount} setPage={setPage} total={total} pageSize={pageSize} />
       </div>
       <div className="mockup-card mt-6 text-sm" style={{ color: "var(--muted)" }}>
         Roles, permission matrix editor, company settings, and audit log are on the mockup but not wired

@@ -215,6 +215,58 @@ redesign — this is a deliberate scope decision given the number of tables invo
 something skipped by accident. If a fully mobile-native table layout (cards instead of horizontal
 scroll) is wanted for specific high-traffic tables, that's a larger follow-up, not done here.
 
+## Pagination and search added everywhere
+
+`src/lib/use-pagination.tsx` — a reusable hook, composes with `useSortableTable` (sort first,
+paginate the sorted result). Applied to all 7 core list tables: Inventory, Sales & Delivery,
+Accounts vouchers, Vendors, Employees, Customers, Admin Users. 5 of these (Accounts, Vendors,
+Employees, Customers, Admin Users) had no search at all before this — added. Verified the
+pagination slicing math against real data (37 real products → 20+17 across 2 pages, zero overlap,
+zero gaps) since the pagination itself only exists client-side and can't be observed in raw SSR
+HTML the same way sorting couldn't either.
+
+**Not yet done:** Reports tabs (Payable/Receivable/Expense Breakdown) and the detail-page ledgers
+(Vendor/Employee/Courier/Product) don't have pagination or search yet. Lower priority since those
+lists are typically small per-entity, but genuinely not finished — don't claim otherwise if asked.
+
+## Shopify Sync — enabled and genuinely tested (Push remains deliberately disabled)
+
+The Inventory page's "Sync with Shopify" button is now real, not just enabled cosmetically —
+`/api/inventory/sync-shopify` pulls the store's product list and creates/updates local products.
+
+**Push Updates to Shopify is still disabled on purpose** — that writes to the user's live
+production Shopify catalog, and this environment has no network access to `*.myshopify.com` to
+test against, so getting it wrong risks real damage to their actual store, not just a sandbox bug.
+Sync (read-only from Shopify's perspective) was the safe thing to build and enable first.
+
+**Critical design rule, matching this app's own established on-hand governance**: sync NEVER
+overwrites cost price, sale price, or on-hand for a product/variant that already exists locally —
+only title, status, and image get refreshed on existing ones. New products/variants get created
+with Shopify's price as a starting point and `on_hand: 0`/`cost_price: null` (needs a real Adjust
+Stock and manual cost entry, same as any other newly-added item). Matching is by `handle`
+(products) and `option1Value`+`option2Value` (variants within a product) — deliberately chosen
+because `products.handle` was already unique-per-tenant in the schema, so this needed **no schema
+migration** at all.
+
+**How this was actually tested, since I have no real Shopify network access from this sandbox:**
+built a local mock HTTP server standing in for Shopify's `products.json` response, temporarily
+added a test-only env var override to point the sync route at it, ran the real route end-to-end,
+then removed the override before packaging (confirmed removed via grep, then rebuilt clean).
+The mock payload deliberately tried to corrupt an existing real variant (Blue Men's Brief,
+Navy/2XL — real seed data: cost Rs 172, price Rs 430, on-hand 100) by sending wildly different
+fake values (price 999, inventory 9999) — confirmed after sync that the real values were
+completely untouched. Also confirmed: a new variant on that same existing product was correctly
+created with Shopify's price and null cost; a brand-new product was correctly created from
+scratch; running sync a second time was confirmed idempotent (0 products created the second
+time, no duplicate variants).
+
+**What this does NOT prove**: that Shopify's real API response shape exactly matches what my mock
+assumed, or that the user's real store's actual data will behave identically. **The first real
+test is still with the user's live store** — same honesty pattern as every other Shopify feature
+in this project. If it fails against the real API, the mismatch is most likely in exactly how
+Shopify's real JSON differs from my assumed shape (pagination via the `Link` header for stores
+with >250 products isn't implemented at all yet — flagged in the route's own comments).
+
 ## Real cash/credit/split accounting, added per user request — no migration needed
 
 **Vendor Purchase now supports Cash / Bank / Credit / Split payment**, not just always-credit like

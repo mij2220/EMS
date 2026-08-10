@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app-shell";
 import { useSortableTable, SortArrow } from "@/lib/use-sortable-table";
+import { usePagination, PaginationControls } from "@/lib/use-pagination";
 
 type Vendor = { id: string; name: string; contact: string | null; status: string; payableBalance: number; lastActivity: string | null };
 
@@ -14,7 +15,14 @@ function fmtRs(n: number) {
 export default function VendorsClient({ tenantName, userInitial }: { tenantName: string; userInitial: string }) {
   const router = useRouter();
   const [vendors, setVendors] = useState<Vendor[]>([]);
-  const { sorted, sortKey, sortDir, toggleSort } = useSortableTable(vendors, "name");
+  const [search, setSearch] = useState("");
+  const filteredVendors = vendors.filter((v) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return v.name.toLowerCase().includes(q) || (v.contact ?? "").toLowerCase().includes(q);
+  });
+  const { sorted, sortKey, sortDir, toggleSort } = useSortableTable(filteredVendors, "name");
+  const { paged, page, setPage, pageCount, pageSize, total } = usePagination(sorted, 20);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Vendor | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +100,15 @@ export default function VendorsClient({ tenantName, userInitial }: { tenantName:
 
   return (
     <AppShell active="vendors" title="Vendors" desc="Vendor master, purchase ledger and payables" tenantName={tenantName} userInitial={userInitial}>
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-between mb-4 flex-wrap gap-2">
+        <input
+          type="text"
+          placeholder="Search vendor or contact…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-64 rounded-lg border px-3 py-2 text-sm"
+          style={{ borderColor: "var(--line)" }}
+        />
         <button onClick={() => setShowAdd(true)} className="mockup-btn mockup-btn-primary">
           + Add Vendor
         </button>
@@ -127,7 +143,7 @@ export default function VendorsClient({ tenantName, userInitial }: { tenantName:
             </tr>
           </thead>
           <tbody>
-            {sorted.map((v) => (
+            {paged.map((v) => (
               <tr
                 key={v.id}
                 onClick={() => router.push(`/dashboard/vendors/${v.id}`)}
@@ -158,6 +174,7 @@ export default function VendorsClient({ tenantName, userInitial }: { tenantName:
             ))}
           </tbody>
         </table>
+        <PaginationControls page={page} pageCount={pageCount} setPage={setPage} total={total} pageSize={pageSize} />
       </div>
 
       {showAdd && (

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useSortableTable, SortArrow } from "@/lib/use-sortable-table";
+import { usePagination, PaginationControls } from "@/lib/use-pagination";
 import AppShell from "@/components/app-shell";
 
 type Order = {
@@ -81,6 +82,7 @@ export default function SalesClient({ tenantName, userInitial }: { tenantName: s
   }, [orders, search, statusFilter, courierFilter, sourceFilter]);
 
   const { sorted, sortKey, sortDir, toggleSort } = useSortableTable(filtered, "placedAt");
+  const { paged, page, setPage, pageCount, pageSize, total } = usePagination(sorted, 20);
 
   return (
     <AppShell
@@ -205,7 +207,7 @@ export default function SalesClient({ tenantName, userInitial }: { tenantName: s
                 </tr>
               )}
               {!loading &&
-                sorted.map((o) => (
+                paged.map((o) => (
                   <tr
                     key={o.id}
                     onClick={() => router.push(`/dashboard/sales/${o.id}`)}
@@ -262,6 +264,7 @@ export default function SalesClient({ tenantName, userInitial }: { tenantName: s
             </tbody>
           </table>
         </div>
+        <PaginationControls page={page} pageCount={pageCount} setPage={setPage} total={total} pageSize={pageSize} />
       </div>
 
       <div className="text-sm mt-3" style={{ color: "var(--muted)" }}>

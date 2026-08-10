@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import AppShell from "@/components/app-shell";
 import { useSortableTable, SortArrow } from "@/lib/use-sortable-table";
+import { usePagination, PaginationControls } from "@/lib/use-pagination";
 
 type Voucher = {
   id: string;
@@ -34,7 +35,20 @@ function fmtRs(n: number) {
 export default function AccountsClient({ tenantName, userInitial }: { tenantName: string; userInitial: string }) {
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
-  const { sorted: sortedVouchers, sortKey: voucherSortKey, sortDir: voucherSortDir, toggleSort: toggleVoucherSort } = useSortableTable(vouchers, "voucherDate");
+  const [voucherSearch, setVoucherSearch] = useState("");
+  const filteredVouchers = vouchers.filter((v) => {
+    const q = voucherSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      v.voucherNumber.toLowerCase().includes(q) ||
+      v.voucherType.toLowerCase().includes(q) ||
+      (v.reference ?? "").toLowerCase().includes(q) ||
+      v.debitAccountName.toLowerCase().includes(q) ||
+      v.creditAccountName.toLowerCase().includes(q)
+    );
+  });
+  const { sorted: sortedVouchers, sortKey: voucherSortKey, sortDir: voucherSortDir, toggleSort: toggleVoucherSort } = useSortableTable(filteredVouchers, "voucherDate");
+  const { paged: pagedVouchers, page: voucherPage, setPage: setVoucherPage, pageCount: voucherPageCount, pageSize: voucherPageSize, total: voucherTotal } = usePagination(sortedVouchers, 20);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -86,7 +100,16 @@ export default function AccountsClient({ tenantName, userInitial }: { tenantName
         </div>
       )}
 
-      <div className="flex justify-end gap-2 mb-4 flex-wrap">
+      <div className="flex justify-between gap-2 mb-4 flex-wrap">
+        <input
+          type="text"
+          placeholder="Search voucher, reference, account…"
+          value={voucherSearch}
+          onChange={(e) => setVoucherSearch(e.target.value)}
+          className="w-64 rounded-lg border px-3 py-2 text-sm"
+          style={{ borderColor: "var(--line)" }}
+        />
+        <div className="flex gap-2 flex-wrap">
         <button onClick={() => setModal("expense")} className="mockup-btn mockup-btn-ghost">
           + Expense
         </button>
@@ -105,6 +128,7 @@ export default function AccountsClient({ tenantName, userInitial }: { tenantName
         <button onClick={() => setModal("voucher")} className="mockup-btn mockup-btn-primary">
           + New Voucher
         </button>
+        </div>
       </div>
 
       <div className="mockup-card !p-0 overflow-hidden">
@@ -134,7 +158,7 @@ export default function AccountsClient({ tenantName, userInitial }: { tenantName
               </tr>
             </thead>
             <tbody>
-              {sortedVouchers.map((v) => (
+              {pagedVouchers.map((v) => (
                 <tr key={v.id} onClick={() => setSelectedVoucherId(v.id)} className="cursor-pointer hover:bg-slate-50" style={{ borderTop: "1px solid var(--line)" }}>
                   <td className="px-4 py-3">{new Date(v.voucherDate).toLocaleDateString()}</td>
                   <td className="px-4 py-3">{v.voucherType}</td>
@@ -164,16 +188,17 @@ export default function AccountsClient({ tenantName, userInitial }: { tenantName
                   </td>
                 </tr>
               ))}
-              {vouchers.length === 0 && (
+              {filteredVouchers.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-4 py-8 text-center" style={{ color: "var(--muted)" }}>
-                    No vouchers yet.
+                    {vouchers.length === 0 ? "No vouchers yet." : "No vouchers match your search."}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+        <PaginationControls page={voucherPage} pageCount={voucherPageCount} setPage={setVoucherPage} total={voucherTotal} pageSize={voucherPageSize} />
       </div>
 
       {modal === "expense" && <ExpenseModal onClose={() => setModal(null)} onSaved={loadAll} />}

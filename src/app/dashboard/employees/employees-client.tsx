@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app-shell";
 import { useSortableTable, SortArrow } from "@/lib/use-sortable-table";
+import { usePagination, PaginationControls } from "@/lib/use-pagination";
 
 type Employee = {
   id: string;
@@ -23,7 +24,14 @@ function fmtRs(n: number) {
 export default function EmployeesClient({ tenantName, userInitial }: { tenantName: string; userInitial: string }) {
   const router = useRouter();
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const { sorted, sortKey, sortDir, toggleSort } = useSortableTable(employees, "name");
+  const [search, setSearch] = useState("");
+  const filteredEmployees = employees.filter((e) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return e.name.toLowerCase().includes(q) || (e.role ?? "").toLowerCase().includes(q);
+  });
+  const { sorted, sortKey, sortDir, toggleSort } = useSortableTable(filteredEmployees, "name");
+  const { paged, page, setPage, pageCount, pageSize, total } = usePagination(sorted, 20);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -101,7 +109,15 @@ export default function EmployeesClient({ tenantName, userInitial }: { tenantNam
 
   return (
     <AppShell active="employees" title="Employees" desc="Employee master, salary history and payroll" tenantName={tenantName} userInitial={userInitial}>
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-between mb-4 flex-wrap gap-2">
+        <input
+          type="text"
+          placeholder="Search name or role…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-64 rounded-lg border px-3 py-2 text-sm"
+          style={{ borderColor: "var(--line)" }}
+        />
         <button onClick={() => setShowAdd(true)} className="mockup-btn mockup-btn-primary">
           + Add Employee
         </button>
@@ -136,7 +152,7 @@ export default function EmployeesClient({ tenantName, userInitial }: { tenantNam
             </tr>
           </thead>
           <tbody>
-            {sorted.map((e) => (
+            {paged.map((e) => (
               <tr
                 key={e.id}
                 onClick={() => router.push(`/dashboard/employees/${e.id}`)}
@@ -169,6 +185,7 @@ export default function EmployeesClient({ tenantName, userInitial }: { tenantNam
             ))}
           </tbody>
         </table>
+        <PaginationControls page={page} pageCount={pageCount} setPage={setPage} total={total} pageSize={pageSize} />
       </div>
 
       {showAdd && (

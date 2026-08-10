@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef } from "react";
 import { useSortableTable, SortArrow } from "@/lib/use-sortable-table";
+import { usePagination, PaginationControls } from "@/lib/use-pagination";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app-shell";
 
@@ -56,6 +57,8 @@ export default function InventoryClient({
   const [statusFilter, setStatusFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
@@ -85,6 +88,7 @@ export default function InventoryClient({
   }, [products, search, statusFilter, locationFilter]);
 
   const { sorted, sortKey, sortDir, toggleSort } = useSortableTable(filtered, "title");
+  const { paged, page, setPage, pageCount, pageSize, total } = usePagination(sorted, 20);
 
   async function handleAddProduct(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -146,7 +150,7 @@ export default function InventoryClient({
   }
 
   function toggleSelectAll() {
-    setSelectedIds((prev) => (prev.size === filtered.length ? new Set() : new Set(filtered.map((p) => p.id))));
+    setSelectedIds((prev) => (prev.size === paged.length ? new Set() : new Set(paged.map((p) => p.id))));
   }
 
   async function handleBulkDelete() {
@@ -199,6 +203,29 @@ export default function InventoryClient({
       setImportMsg("Could not reach the server.");
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function handleSync() {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch("/api/inventory/sync-shopify", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setSyncResult(`Sync failed: ${data.error ?? "unknown error"}`);
+        return;
+      }
+      setSyncResult(
+        `Synced: ${data.productsCreated} new product(s), ${data.productsUpdated} updated, ${data.variantsCreated} new variant(s)` +
+          (data.errors.length ? ` — ${data.errors.length} error(s): ${data.errors.join("; ")}` : ".")
+      );
+      router.refresh();
+      window.location.reload();
+    } catch {
+      setSyncResult("Could not reach the server.");
+    } finally {
+      setSyncing(false);
     }
   }
 
@@ -255,15 +282,16 @@ export default function InventoryClient({
             Export
           </a>
           <button
-            disabled
-            title="Requires a connected Shopify store (Admin → API Settings) — not configured in this demo."
-            className="mockup-btn mockup-btn-ghost opacity-50 cursor-not-allowed"
+            onClick={handleSync}
+            disabled={syncing}
+            title="Pulls product listings from Shopify — creates new products, refreshes title/status/image on existing ones. Never touches cost, sale price, or on-hand for anything that already exists locally."
+            className="mockup-btn mockup-btn-ghost disabled:opacity-50"
           >
-            ⟳ Sync with Shopify
+            {syncing ? "Syncing…" : "⟳ Sync with Shopify"}
           </button>
           <button
             disabled
-            title="Requires a connected Shopify store (Admin → API Settings) — not configured in this demo."
+            title="Not built yet — this would write price/stock changes back to your live Shopify store, so it's deliberately held back until Sync has been used and verified for a while first."
             className="mockup-btn mockup-btn-ghost opacity-50 cursor-not-allowed"
           >
             Push Updates to Shopify
@@ -304,6 +332,15 @@ export default function InventoryClient({
         </div>
       )}
 
+      {syncResult && (
+        <div
+          className="text-sm rounded-lg px-3 py-2 mb-3"
+          style={syncResult.startsWith("Sync failed") || syncResult.startsWith("Could not") ? { background: "var(--bad-bg)", color: "var(--bad)" } : { background: "var(--good-bg)", color: "var(--good)" }}
+        >
+          {syncResult}
+        </div>
+      )}
+
       <div className="text-sm mb-4" style={{ color: "var(--muted)" }}>
         Showing all {products.length} products ({totalVariants} total variants). <b>SKU is missing on {missingSkuCount} of {products.length} products</b> —
         true of your actual Shopify export. Photos: {withPhotoCount}/{products.length} fetched live from aimexa.store, the rest show a placeholder.
@@ -317,7 +354,7 @@ export default function InventoryClient({
                 <th className="px-4 py-3 w-8">
                   <input
                     type="checkbox"
-                    checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                    checked={paged.length > 0 && selectedIds.size === paged.length}
                     onChange={toggleSelectAll}
                   />
                 </th>
@@ -348,7 +385,7 @@ export default function InventoryClient({
               </tr>
             </thead>
             <tbody>
-              {sorted.map((p) => {
+              {paged.map((p) => {
                 const st = statusOf(p);
                 const profit =
                   p.minPrice != null && p.minCost != null ? p.minPrice - p.minCost : null;
@@ -412,6 +449,7 @@ export default function InventoryClient({
             </tbody>
           </table>
         </div>
+        <PaginationControls page={page} pageCount={pageCount} setPage={setPage} total={total} pageSize={pageSize} />
       </div>
 
       {showAddModal && (
