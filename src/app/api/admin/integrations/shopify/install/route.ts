@@ -52,5 +52,6 @@ export async function GET(req: NextRequest) {
   authorizeUrl.searchParams.set("redirect_uri", redirectUri);
   authorizeUrl.searchParams.set("state", state);
 
+  console.log("[shopify-install] redirecting to:", authorizeUrl.toString());
   return NextResponse.redirect(authorizeUrl.toString());
 }

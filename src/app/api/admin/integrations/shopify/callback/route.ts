@@ -39,6 +39,8 @@ function verifyHmac(searchParams: URLSearchParams, secret: string): boolean {
 }
 
 export async function GET(req: NextRequest) {
+  console.log("[shopify-callback] hit:", req.nextUrl.toString());
+
   const appUrl = process.env.APP_URL;
   const params = req.nextUrl.searchParams;
   const code = params.get("code");
@@ -55,76 +57,98 @@ export async function GET(req: NextRequest) {
   // missing, fail loudly in the response body rather than silently
   // redirecting somewhere broken.
   if (!appUrl) {
+    console.error("[shopify-callback] APP_URL is not set");
     return NextResponse.json({ error: "APP_URL is not set on the server." }, { status: 500 });
   }
   if (!secret || !clientId || !clientSecret) {
+    console.error("[shopify-callback] missing env vars", { hasSecret: !!secret, hasClientId: !!clientId, hasClientSecret: !!clientSecret });
     return redirectToAdmin(appUrl, "error", "Server is missing SHOPIFY_CLIENT_ID/SHOPIFY_CLIENT_SECRET.");
   }
   if (!code || !shop || !state) {
+    console.error("[shopify-callback] missing query params", { hasCode: !!code, shop, hasState: !!state });
     return redirectToAdmin(appUrl, "error", "Shopify's redirect was missing required parameters.");
   }
 
-  // 1. Verify this really came from Shopify.
-  if (!verifyHmac(params, clientSecret)) {
-    return redirectToAdmin(appUrl, "error", "Could not verify the request came from Shopify (HMAC mismatch).");
-  }
-
-  // 2. Verify the state we signed on the way out, and recover which
-  // tenant/store this install belongs to.
-  let decoded: OAuthState;
   try {
-    decoded = jwt.verify(state, secret) as unknown as OAuthState;
-  } catch {
-    return redirectToAdmin(appUrl, "error", "This connection link expired or was invalid — try connecting again.");
-  }
-  if (decoded.storeUrl !== shop) {
-    return redirectToAdmin(appUrl, "error", `Shopify authorized a different store (${shop}) than requested (${decoded.storeUrl}).`);
-  }
+    // 1. Verify this really came from Shopify.
+    if (!verifyHmac(params, clientSecret)) {
+      console.error("[shopify-callback] HMAC verification failed");
+      return redirectToAdmin(appUrl, "error", "Could not verify the request came from Shopify (HMAC mismatch).");
+    }
+    console.log("[shopify-callback] HMAC ok");
 
-  // 3. Exchange the one-time code for a real, long-lived Admin API access token.
-  let accessToken: string;
-  try {
-    const tokenRes = await fetch(`https://${shop}/admin/oauth/access_token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!tokenRes.ok) {
-      const text = await tokenRes.text().catch(() => "");
-      return redirectToAdmin(appUrl, "error", `Shopify rejected the code exchange (HTTP ${tokenRes.status}): ${text.slice(0, 200)}`);
+    // 2. Verify the state we signed on the way out, and recover which
+    // tenant/store this install belongs to.
+    let decoded: OAuthState;
+    try {
+      decoded = jwt.verify(state, secret) as unknown as OAuthState;
+    } catch (e) {
+      console.error("[shopify-callback] state verify failed:", e instanceof Error ? e.message : e);
+      return redirectToAdmin(appUrl, "error", "This connection link expired or was invalid — try connecting again.");
     }
-    const tokenData = await tokenRes.json();
-    accessToken = tokenData?.access_token;
-    if (!accessToken) {
-      return redirectToAdmin(appUrl, "error", "Shopify's response didn't include an access token.");
+    console.log("[shopify-callback] state ok, tenantId:", decoded.tenantId, "expectedShop:", decoded.storeUrl);
+    if (decoded.storeUrl !== shop) {
+      console.error("[shopify-callback] shop mismatch", { expected: decoded.storeUrl, actual: shop });
+      return redirectToAdmin(appUrl, "error", `Shopify authorized a different store (${shop}) than requested (${decoded.storeUrl}).`);
     }
+
+    // 3. Exchange the one-time code for a real, long-lived Admin API access token.
+    let accessToken: string;
+    try {
+      const tokenRes = await fetch(`https://${shop}/admin/oauth/access_token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      console.log("[shopify-callback] token exchange status:", tokenRes.status);
+      if (!tokenRes.ok) {
+        const text = await tokenRes.text().catch(() => "");
+        console.error("[shopify-callback] token exchange rejected:", text.slice(0, 500));
+        return redirectToAdmin(appUrl, "error", `Shopify rejected the code exchange (HTTP ${tokenRes.status}): ${text.slice(0, 200)}`);
+      }
+      const tokenData = await tokenRes.json();
+      accessToken = tokenData?.access_token;
+      if (!accessToken) {
+        console.error("[shopify-callback] no access_token in response:", JSON.stringify(tokenData).slice(0, 500));
+        return redirectToAdmin(appUrl, "error", "Shopify's response didn't include an access token.");
+      }
+      console.log("[shopify-callback] got access token, length:", accessToken.length);
+    } catch (e) {
+      console.error("[shopify-callback] token exchange threw:", e instanceof Error ? e.stack : e);
+      return redirectToAdmin(appUrl, "error", e instanceof Error ? e.message : "Could not reach Shopify to exchange the code.");
+    }
+
+    // 4. Store it, encrypted — same table/column the manual-entry flow used,
+    // so Test Connection / Sync keep working unchanged.
+    const encrypted = encryptSecret(accessToken);
+    const existing = await db
+      .selectFrom("integrationCredentials")
+      .select("id")
+      .where("tenantId", "=", decoded.tenantId)
+      .where("provider", "=", "shopify")
+      .executeTakeFirst();
+
+    if (existing) {
+      await db
+        .updateTable("integrationCredentials")
+        .set({ storeUrl: shop, credentialsEncrypted: encrypted, status: "disconnected", lastError: null })
+        .where("id", "=", existing.id)
+        .execute();
+      console.log("[shopify-callback] updated existing credentials row:", existing.id);
+    } else {
+      await db
+        .insertInto("integrationCredentials")
+        .values({ tenantId: decoded.tenantId, provider: "shopify", storeUrl: shop, credentialsEncrypted: encrypted, status: "disconnected" })
+        .execute();
+      console.log("[shopify-callback] inserted new credentials row for tenant:", decoded.tenantId);
+    }
+
+    return redirectToAdmin(appUrl, "connected");
   } catch (e) {
-    return redirectToAdmin(appUrl, "error", e instanceof Error ? e.message : "Could not reach Shopify to exchange the code.");
+    // Safety net: anything unexpected (e.g. a DB error) lands here instead
+    // of Next.js serving a bare 500 page with no explanation.
+    console.error("[shopify-callback] unexpected error:", e instanceof Error ? e.stack : e);
+    return redirectToAdmin(appUrl, "error", e instanceof Error ? e.message : "Unexpected server error.");
   }
-
-  // 4. Store it, encrypted — same table/column the manual-entry flow used,
-  // so Test Connection / Sync keep working unchanged.
-  const encrypted = encryptSecret(accessToken);
-  const existing = await db
-    .selectFrom("integrationCredentials")
-    .select("id")
-    .where("tenantId", "=", decoded.tenantId)
-    .where("provider", "=", "shopify")
-    .executeTakeFirst();
-
-  if (existing) {
-    await db
-      .updateTable("integrationCredentials")
-      .set({ storeUrl: shop, credentialsEncrypted: encrypted, status: "disconnected", lastError: null })
-      .where("id", "=", existing.id)
-      .execute();
-  } else {
-    await db
-      .insertInto("integrationCredentials")
-      .values({ tenantId: decoded.tenantId, provider: "shopify", storeUrl: shop, credentialsEncrypted: encrypted, status: "disconnected" })
-      .execute();
-  }
-
-  return redirectToAdmin(appUrl, "connected");
 }
