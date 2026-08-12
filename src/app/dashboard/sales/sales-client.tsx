@@ -54,15 +54,48 @@ export default function SalesClient({ tenantName, userInitial }: { tenantName: s
   const [courierFilter, setCourierFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
   const [showHistory, setShowHistory] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ ok: boolean; message: string } | null>(null);
 
-  useEffect(() => {
+  function loadOrders() {
     fetch("/api/sales/orders")
       .then((r) => r.json())
       .then((d) => {
         setOrders(d.orders ?? []);
         setLoading(false);
       });
+  }
+
+  useEffect(() => {
+    loadOrders();
   }, []);
+
+  async function handleSyncSales() {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch("/api/sales/sync-shopify", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setSyncResult({ ok: false, message: data.error ?? "Sync failed." });
+        return;
+      }
+      const parts = [`${data.ordersCreated} created`, `${data.ordersUpdated} updated`, `${data.ordersSkipped} skipped`];
+      let message = `Synced — ${parts.join(", ")}.`;
+      if (data.unmatchedItems?.length) {
+        message += ` ${data.unmatchedItems.length} line item(s) couldn't be matched to a product/variant.`;
+      }
+      if (data.errors?.length) {
+        message += ` ${data.errors.length} order(s) failed.`;
+      }
+      setSyncResult({ ok: !data.errors?.length, message });
+      loadOrders();
+    } catch {
+      setSyncResult({ ok: false, message: "Could not reach the server." });
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   const couriers = useMemo(() => [...new Set(orders.map((o) => o.courierName).filter((c): c is string => !!c))].sort(), [orders]);
 
@@ -145,11 +178,11 @@ export default function SalesClient({ tenantName, userInitial }: { tenantName: s
             🕘 Import History
           </button>
           <button
-            disabled
-            title="Requires a connected Shopify store (Admin → API Settings) — not configured in this demo."
-            className="mockup-btn mockup-btn-ghost opacity-50 cursor-not-allowed"
+            onClick={handleSyncSales}
+            disabled={syncing}
+            className="mockup-btn mockup-btn-ghost disabled:opacity-50"
           >
-            ⟳ Sync Sales
+            {syncing ? "Syncing…" : "⟳ Sync Sales"}
           </button>
           <button
             disabled
@@ -160,6 +193,15 @@ export default function SalesClient({ tenantName, userInitial }: { tenantName: s
           </button>
         </div>
       </div>
+
+      {syncResult && (
+        <div
+          className="text-sm rounded-lg px-3 py-2 mb-4"
+          style={{ background: syncResult.ok ? "var(--good-bg)" : "var(--bad-bg)", color: syncResult.ok ? "var(--good)" : "var(--bad)" }}
+        >
+          {syncResult.message}
+        </div>
+      )}
 
       <div className="mockup-card !p-0 overflow-hidden">
         <div className="overflow-x-auto">
