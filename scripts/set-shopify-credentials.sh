@@ -36,8 +36,11 @@ if [ -z "$CLIENT_ID" ] || [ -z "$CLIENT_SECRET" ]; then
   exit 1
 fi
 
-echo "== Setting SHOPIFY_CLIENT_ID and SHOPIFY_CLIENT_SECRET on Railway =="
-railway variables --set "SHOPIFY_CLIENT_ID=$CLIENT_ID" --set "SHOPIFY_CLIENT_SECRET=$CLIENT_SECRET"
+echo "== Setting SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET, and APP_URL on Railway =="
+railway variables \
+  --set "SHOPIFY_CLIENT_ID=$CLIENT_ID" \
+  --set "SHOPIFY_CLIENT_SECRET=$CLIENT_SECRET" \
+  --set "APP_URL=https://ems-production-786.up.railway.app"
 
 echo ""
 echo "✓ Done. Railway will redeploy automatically with the new variables."

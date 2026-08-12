@@ -9,8 +9,8 @@ interface OAuthState {
   storeUrl: string;
 }
 
-function redirectToAdmin(origin: string, status: "connected" | "error", detail?: string) {
-  const url = new URL("/dashboard/admin", origin);
+function redirectToAdmin(appUrl: string, status: "connected" | "error", detail?: string) {
+  const url = new URL("/dashboard/admin", appUrl);
   url.searchParams.set("shopify", status);
   if (detail) url.searchParams.set("detail", detail);
   return NextResponse.redirect(url.toString());
@@ -39,7 +39,7 @@ function verifyHmac(searchParams: URLSearchParams, secret: string): boolean {
 }
 
 export async function GET(req: NextRequest) {
-  const origin = req.nextUrl.origin;
+  const appUrl = process.env.APP_URL;
   const params = req.nextUrl.searchParams;
   const code = params.get("code");
   const shop = params.get("shop");
@@ -49,16 +49,24 @@ export async function GET(req: NextRequest) {
   const clientId = process.env.SHOPIFY_CLIENT_ID;
   const clientSecret = process.env.SHOPIFY_CLIENT_SECRET;
 
+  // appUrl has no fallback here deliberately — without it we can't build a
+  // reliable redirect back into EMS (see install/route.ts for why
+  // req.nextUrl.origin isn't trustworthy behind Railway's proxy). If it's
+  // missing, fail loudly in the response body rather than silently
+  // redirecting somewhere broken.
+  if (!appUrl) {
+    return NextResponse.json({ error: "APP_URL is not set on the server." }, { status: 500 });
+  }
   if (!secret || !clientId || !clientSecret) {
-    return redirectToAdmin(origin, "error", "Server is missing SHOPIFY_CLIENT_ID/SHOPIFY_CLIENT_SECRET.");
+    return redirectToAdmin(appUrl, "error", "Server is missing SHOPIFY_CLIENT_ID/SHOPIFY_CLIENT_SECRET.");
   }
   if (!code || !shop || !state) {
-    return redirectToAdmin(origin, "error", "Shopify's redirect was missing required parameters.");
+    return redirectToAdmin(appUrl, "error", "Shopify's redirect was missing required parameters.");
   }
 
   // 1. Verify this really came from Shopify.
   if (!verifyHmac(params, clientSecret)) {
-    return redirectToAdmin(origin, "error", "Could not verify the request came from Shopify (HMAC mismatch).");
+    return redirectToAdmin(appUrl, "error", "Could not verify the request came from Shopify (HMAC mismatch).");
   }
 
   // 2. Verify the state we signed on the way out, and recover which
@@ -67,10 +75,10 @@ export async function GET(req: NextRequest) {
   try {
     decoded = jwt.verify(state, secret) as unknown as OAuthState;
   } catch {
-    return redirectToAdmin(origin, "error", "This connection link expired or was invalid — try connecting again.");
+    return redirectToAdmin(appUrl, "error", "This connection link expired or was invalid — try connecting again.");
   }
   if (decoded.storeUrl !== shop) {
-    return redirectToAdmin(origin, "error", "Store mismatch between the request and Shopify's redirect.");
+    return redirectToAdmin(appUrl, "error", `Shopify authorized a different store (${shop}) than requested (${decoded.storeUrl}).`);
   }
 
   // 3. Exchange the one-time code for a real, long-lived Admin API access token.
@@ -84,15 +92,15 @@ export async function GET(req: NextRequest) {
     });
     if (!tokenRes.ok) {
       const text = await tokenRes.text().catch(() => "");
-      return redirectToAdmin(origin, "error", `Shopify rejected the code exchange (HTTP ${tokenRes.status}): ${text.slice(0, 200)}`);
+      return redirectToAdmin(appUrl, "error", `Shopify rejected the code exchange (HTTP ${tokenRes.status}): ${text.slice(0, 200)}`);
     }
     const tokenData = await tokenRes.json();
     accessToken = tokenData?.access_token;
     if (!accessToken) {
-      return redirectToAdmin(origin, "error", "Shopify's response didn't include an access token.");
+      return redirectToAdmin(appUrl, "error", "Shopify's response didn't include an access token.");
     }
   } catch (e) {
-    return redirectToAdmin(origin, "error", e instanceof Error ? e.message : "Could not reach Shopify to exchange the code.");
+    return redirectToAdmin(appUrl, "error", e instanceof Error ? e.message : "Could not reach Shopify to exchange the code.");
   }
 
   // 4. Store it, encrypted — same table/column the manual-entry flow used,
@@ -118,5 +126,5 @@ export async function GET(req: NextRequest) {
       .execute();
   }
 
-  return redirectToAdmin(origin, "connected");
+  return redirectToAdmin(appUrl, "connected");
 }

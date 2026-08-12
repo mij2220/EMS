@@ -36,9 +36,18 @@ From the app's Settings → Credentials page:
 |---|---|
 | `SHOPIFY_CLIENT_ID` | the app's Client ID |
 | `SHOPIFY_CLIENT_SECRET` | the app's Secret |
+| `APP_URL` | `https://ems-production-786.up.railway.app` (no trailing slash) |
 
 `JWT_SECRET` should already be set — it's reused to sign the short-lived OAuth
 state token, no new secret needed there.
+
+`APP_URL` matters more than it looks: Railway's proxy setup means the app
+can't reliably detect its own public URL from the incoming request (it was
+resolving to `localhost`, which Shopify then rejected as an unwhitelisted
+redirect_uri). `APP_URL` is the fix — it must exactly match the domain used
+in the Shopify app's "Redirect URLs" field.
+
+The `set-shopify-credentials.sh` script sets all three for you.
 
 ## 4. Connect
 
@@ -56,3 +65,14 @@ no field anywhere in Shopify's UI containing a copy-pasteable token for this
 app type — the Client ID/Secret pair you may have pasted before is for
 authenticating the OAuth exchange itself, not for calling the Admin API
 directly, which is why Shopify was rejecting it outright.
+
+## 5. If Shopify still redirects to the wrong store
+
+If, after fixing the redirect URL, clicking "Continue to Shopify" for
+`aimexa.myshopify.com` still lands you on a *different* store's authorize
+page (e.g. a dev store), the app itself likely isn't set up to be installed
+on a real merchant store yet — Dev Dashboard apps often default to only
+authorizing against your own development stores until distribution is
+configured for a specific merchant. Look for a "Distribution" section in the
+app's settings and check whether it's scoped to your dev store only rather
+than to `aimexa.myshopify.com`.
