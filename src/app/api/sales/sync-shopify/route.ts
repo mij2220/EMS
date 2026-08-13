@@ -47,6 +47,58 @@ function guessPaymentType(so: ShopifyOrder): string {
   return "Prepaid";
 }
 
+async function matchAndInsertLineItems(
+  tenantId: string,
+  orderId: string,
+  orderNumber: string,
+  lineItems: ShopifyLineItem[],
+  unmatchedItems: string[]
+): Promise<number> {
+  // Line items: Shopify's order line items don't include the product
+  // handle — only title and variant_title (e.g. "Blue / Large"). Match
+  // against EMS's products/variants by title + parsed option values,
+  // the closest equivalent to the handle+option matching the product
+  // sync already uses, given SKU is missing store-wide.
+  let inserted = 0;
+  for (const li of lineItems) {
+    const [opt1, opt2] = (li.variant_title ?? "").split(" / ").map((s) => s.trim() || null);
+
+    const product = await db
+      .selectFrom("products")
+      .select(["id"])
+      .where("tenantId", "=", tenantId)
+      .where("title", "=", li.title)
+      .executeTakeFirst();
+
+    const variant = product
+      ? await db
+          .selectFrom("variants")
+          .select(["id", "costPrice"])
+          .where("productId", "=", product.id)
+          .where((eb) => eb.and([eb("option1Value", "=", opt1), eb("option2Value", "=", opt2)]))
+          .executeTakeFirst()
+      : undefined;
+
+    if (!variant) {
+      unmatchedItems.push(`${orderNumber}: "${li.title}" (${li.variant_title ?? "no variant"})`);
+      continue;
+    }
+
+    await db
+      .insertInto("orderItems")
+      .values({
+        orderId,
+        variantId: variant.id,
+        qty: li.quantity,
+        unitPrice: li.price,
+        unitCost: variant.costPrice ?? "0",
+      })
+      .execute();
+    inserted++;
+  }
+  return inserted;
+}
+
 export async function POST(req: NextRequest) {
   const session = getSession(req);
   if (!session) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
@@ -93,18 +145,28 @@ export async function POST(req: NextRequest) {
 
   for (const so of shopifyOrders) {
     try {
-      const orderNumber = so.name;
+      // Shopify's order.name already includes a leading "#" (e.g. "#1051").
+      // EMS's own orderNumber values never do — the UI prepends "#" itself
+      // when rendering. Strip it here so synced orders don't end up
+      // displaying "##1051".
+      const orderNumber = so.name.replace(/^#/, "");
 
       const existingOrder = await db
         .selectFrom("orders")
         .select(["id", "status"])
         .where("tenantId", "=", session.tenantId)
-        .where("orderNumber", "=", orderNumber)
+        // Matches both the clean form going forward and the "#"-prefixed
+        // form a prior version of this sync stored, so re-running this
+        // after the fix updates those rows in place instead of creating
+        // duplicates.
+        .where((eb) => eb.or([eb("orderNumber", "=", orderNumber), eb("orderNumber", "=", so.name)]))
         .executeTakeFirst();
 
       const firstFulfillment = so.fulfillments?.[0];
 
       if (existingOrder) {
+        let changed = false;
+
         // Never touch status here if EMS has already moved it past what
         // Shopify sync would set (e.g. someone already marked it Delivered
         // or Returned by hand) — only ever refresh tracking info, which is
@@ -115,13 +177,41 @@ export async function POST(req: NextRequest) {
             .set({
               status: mapStatus(so),
               trackingNumber: firstFulfillment?.tracking_number ?? null,
+              orderNumber, // normalizes legacy rows stored with a leading "#"
             })
             .where("id", "=", existingOrder.id)
             .execute();
-          ordersUpdated++;
+          changed = true;
         } else {
-          ordersSkipped++;
+          // Status is locked in (delivered/returned), but still normalize a
+          // legacy "#"-prefixed orderNumber if that's what's stored, so the
+          // double-"#" display bug gets fixed regardless of status.
+          const current = await db.selectFrom("orders").select(["orderNumber"]).where("id", "=", existingOrder.id).executeTakeFirstOrThrow();
+          if (current.orderNumber !== orderNumber) {
+            await db.updateTable("orders").set({ orderNumber }).where("id", "=", existingOrder.id).execute();
+            changed = true;
+          }
         }
+
+        // Backfill line items only if this order genuinely has none yet —
+        // covers orders that pre-existed (e.g. from seed data) with the
+        // right order number but no items attached. Never touches an order
+        // that already has at least one item, so real data is never
+        // duplicated or overwritten. Safe to do even for delivered/returned
+        // orders — it only adds reporting data (qty/price), it doesn't
+        // touch status or stock (only Mark Delivered/Returned do that).
+        const itemCount = await db
+          .selectFrom("orderItems")
+          .select(({ fn }) => [fn.count<string>("id").as("count")])
+          .where("orderId", "=", existingOrder.id)
+          .executeTakeFirst();
+        if (Number(itemCount?.count ?? 0) === 0) {
+          const n = await matchAndInsertLineItems(session.tenantId, existingOrder.id, orderNumber, so.line_items, unmatchedItems);
+          if (n > 0) changed = true;
+        }
+
+        if (changed) ordersUpdated++;
+        else ordersSkipped++;
         continue;
       }
 
@@ -197,46 +287,8 @@ export async function POST(req: NextRequest) {
         .returning("id")
         .executeTakeFirstOrThrow();
 
-      // Line items: Shopify's order line items don't include the product
-      // handle — only title and variant_title (e.g. "Blue / Large"). Match
-      // against EMS's products/variants by title + parsed option values,
-      // the closest equivalent to the handle+option matching the product
-      // sync already uses, given SKU is missing store-wide.
-      for (const li of so.line_items) {
-        const [opt1, opt2] = (li.variant_title ?? "").split(" / ").map((s) => s.trim() || null);
-
-        const product = await db
-          .selectFrom("products")
-          .select(["id"])
-          .where("tenantId", "=", session.tenantId)
-          .where("title", "=", li.title)
-          .executeTakeFirst();
-
-        const variant = product
-          ? await db
-              .selectFrom("variants")
-              .select(["id", "costPrice"])
-              .where("productId", "=", product.id)
-              .where((eb) => eb.and([eb("option1Value", "=", opt1), eb("option2Value", "=", opt2)]))
-              .executeTakeFirst()
-          : undefined;
-
-        if (!variant) {
-          unmatchedItems.push(`${orderNumber}: "${li.title}" (${li.variant_title ?? "no variant"})`);
-          continue;
-        }
-
-        await db
-          .insertInto("orderItems")
-          .values({
-            orderId: newOrder.id,
-            variantId: variant.id,
-            qty: li.quantity,
-            unitPrice: li.price,
-            unitCost: variant.costPrice ?? "0",
-          })
-          .execute();
-      }
+      // Line items — see matchAndInsertLineItems for the matching approach.
+      await matchAndInsertLineItems(session.tenantId, newOrder.id, orderNumber, so.line_items, unmatchedItems);
 
       ordersCreated++;
     } catch (err) {
