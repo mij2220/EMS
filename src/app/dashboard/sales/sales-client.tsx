@@ -97,6 +97,17 @@ export default function SalesClient({ tenantName, userInitial }: { tenantName: s
     }
   }
 
+  function exportUrl(all: boolean) {
+    if (all) return "/api/sales/export";
+    const params = new URLSearchParams();
+    if (search.trim()) params.set("q", search.trim());
+    if (statusFilter) params.set("status", statusFilter);
+    if (courierFilter) params.set("courier", courierFilter);
+    if (sourceFilter) params.set("source", sourceFilter);
+    const qs = params.toString();
+    return "/api/sales/export" + (qs ? `?${qs}` : "");
+  }
+
   const couriers = useMemo(() => [...new Set(orders.map((o) => o.courierName).filter((c): c is string => !!c))].sort(), [orders]);
 
   const filtered = useMemo(() => {
@@ -184,6 +195,12 @@ export default function SalesClient({ tenantName, userInitial }: { tenantName: s
           >
             {syncing ? "Syncing…" : "⟳ Sync Sales"}
           </button>
+          <a href={exportUrl(false)} className="mockup-btn mockup-btn-ghost inline-block">
+            Export Filtered
+          </a>
+          <a href={exportUrl(true)} className="mockup-btn mockup-btn-ghost inline-block">
+            Export All
+          </a>
           <button
             disabled
             title="PDF parsing (reading a real courier consignment slip and matching it to orders) is a larger, riskier build than the rest of this app — deliberately not faked. See EMS_Development_Plan.md."

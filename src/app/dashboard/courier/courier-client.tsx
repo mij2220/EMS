@@ -31,6 +31,11 @@ export default function CourierClient({ tenantName, userInitial }: { tenantName:
 
   return (
     <AppShell active="courier" title="Courier" desc="Per-courier accounts, remittance cycles and COD variance" tenantName={tenantName} userInitial={userInitial}>
+      <div className="flex justify-end mb-4">
+        <a href="/api/couriers/export" className="mockup-btn mockup-btn-ghost inline-block">
+          Export
+        </a>
+      </div>
       <div className="grid md:grid-cols-3 gap-4">
         {couriers.map((c) => (
           <div key={c.id} onClick={() => router.push(`/dashboard/courier/${c.id}`)} className="mockup-card cursor-pointer hover:shadow-md transition-shadow">

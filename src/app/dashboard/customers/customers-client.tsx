@@ -30,7 +30,7 @@ export default function CustomersClient({ tenantName, userInitial }: { tenantNam
 
   return (
     <AppShell active="customers" title="Customers" desc="Customer master, order history and repeat-buyer report" tenantName={tenantName} userInitial={userInitial}>
-      <div className="mb-4">
+      <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
         <input
           type="text"
           placeholder="Search name, phone, or city…"
@@ -39,6 +39,17 @@ export default function CustomersClient({ tenantName, userInitial }: { tenantNam
           className="w-64 rounded-lg border px-3 py-2 text-sm"
           style={{ borderColor: "var(--line)" }}
         />
+        <div className="flex gap-2 flex-wrap">
+          <a
+            href={"/api/customers/export" + (search.trim() ? `?q=${encodeURIComponent(search.trim())}` : "")}
+            className="mockup-btn mockup-btn-ghost inline-block"
+          >
+            Export Filtered
+          </a>
+          <a href="/api/customers/export" className="mockup-btn mockup-btn-ghost inline-block">
+            Export All
+          </a>
+        </div>
       </div>
       <div className="mockup-card !p-0 overflow-hidden">
         <table className="w-full text-sm">

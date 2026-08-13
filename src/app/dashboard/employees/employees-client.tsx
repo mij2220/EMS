@@ -122,6 +122,17 @@ export default function EmployeesClient({ tenantName, userInitial }: { tenantNam
           + Add Employee
         </button>
       </div>
+      <div className="flex justify-end mb-4 flex-wrap gap-2">
+        <a
+          href={"/api/employees/export" + (search.trim() ? `?q=${encodeURIComponent(search.trim())}` : "")}
+          className="mockup-btn mockup-btn-ghost inline-block"
+        >
+          Export Filtered
+        </a>
+        <a href="/api/employees/export" className="mockup-btn mockup-btn-ghost inline-block">
+          Export All
+        </a>
+      </div>
 
       {actionError && (
         <div className="text-sm rounded-lg px-3 py-2 mb-3" style={{ background: "var(--bad-bg)", color: "var(--bad)" }}>
