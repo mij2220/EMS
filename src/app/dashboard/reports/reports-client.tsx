@@ -34,6 +34,17 @@ export default function ReportsClient({
   const router = useRouter();
   const startingTab: TabKey = VALID_TABS.includes(initialTab as TabKey) ? (initialTab as TabKey) : "valuation";
   const [tab, setTab] = useState<TabKey>(startingTab);
+
+  // useState's initializer only runs on first mount — navigating here again
+  // with a different ?tab= (e.g. Sales & Delivery's Reports link, then
+  // Accounts' Reports link) doesn't remount this component in the App
+  // Router, so without this the tab silently gets stuck on whichever one
+  // was active on first visit, regardless of which "Reports" link was
+  // actually clicked. This keeps it in sync with the URL every time.
+  useEffect(() => {
+    setTab(VALID_TABS.includes(initialTab as TabKey) ? (initialTab as TabKey) : "valuation");
+  }, [initialTab]);
+
   const [valuation, setValuation] = useState<StockValuation | null>(null);
   const [sales, setSales] = useState<Sales | null>(null);
   const [pl, setPl] = useState<ProfitLoss | null>(null);
