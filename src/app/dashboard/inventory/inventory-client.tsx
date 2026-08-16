@@ -223,8 +223,18 @@ export default function InventoryClient({
           (data.errors.length ? ` ${data.errors.length} error(s): ${data.errors.join("; ")}` : "")
       );
       setDuplicateVariants(data.duplicateVariants ?? []);
-      router.refresh();
-      window.location.reload();
+
+      // Refetch and update state directly rather than reloading the page —
+      // `products` is local useState seeded once from a prop, so a bare
+      // router.refresh() wouldn't actually update the visible table, but a
+      // full window.location.reload() wiped this result banner before
+      // anyone could read it. This does both: fresh data AND a banner that
+      // actually stays visible.
+      const productsRes = await fetch("/api/inventory/products");
+      if (productsRes.ok) {
+        const productsData = await productsRes.json();
+        setProducts(productsData.products ?? productsData);
+      }
     } catch {
       setSyncResult("Could not reach the server.");
     } finally {
