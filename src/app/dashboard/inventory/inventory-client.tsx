@@ -60,6 +60,8 @@ export default function InventoryClient({
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [duplicateVariants, setDuplicateVariants] = useState<string[]>([]);
+  const [cleaning, setCleaning] = useState(false);
+  const [cleanupResult, setCleanupResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
@@ -242,6 +244,34 @@ export default function InventoryClient({
     }
   }
 
+  async function handleCleanupDuplicates() {
+    setCleaning(true);
+    setCleanupResult(null);
+    try {
+      const res = await fetch("/api/inventory/cleanup-duplicates", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setCleanupResult(`Cleanup failed: ${data.error ?? "unknown error"}`);
+        return;
+      }
+      setCleanupResult(
+        `Removed ${data.deleted} duplicate variant row(s).` +
+          (data.needsManualReview?.length ? ` ${data.needsManualReview.length} pair(s) have order/stock history and need manual review — see below.` : "")
+      );
+      setDuplicateVariants(data.needsManualReview ?? []);
+
+      const productsRes = await fetch("/api/inventory/products");
+      if (productsRes.ok) {
+        const productsData = await productsRes.json();
+        setProducts(productsData.products ?? productsData);
+      }
+    } catch {
+      setCleanupResult("Could not reach the server.");
+    } finally {
+      setCleaning(false);
+    }
+  }
+
   return (
     <AppShell
       active="inventory"
@@ -355,13 +385,29 @@ export default function InventoryClient({
       )}
 
       {duplicateVariants.length > 0 && (
-        <div className="text-sm rounded-lg px-3 py-2 mb-3" style={{ background: "var(--bad-bg)", color: "var(--bad)" }}>
-          <b>Duplicate variants from before the case-sensitivity fix:</b>
+        <div className="text-sm rounded-lg px-3 py-2 mb-3" style={{ background: "var(--warn-bg)", color: "var(--warn)" }}>
+          <div className="flex items-start justify-between gap-3 flex-wrap mb-1">
+            <b>Duplicate variants from before the case-sensitivity fix (not an error — cleanup available):</b>
+            <button
+              onClick={handleCleanupDuplicates}
+              disabled={cleaning}
+              className="mockup-btn mockup-btn-ghost !py-1 !px-2 text-xs shrink-0 disabled:opacity-50"
+              style={{ borderColor: "var(--warn)", color: "var(--warn)" }}
+            >
+              {cleaning ? "Cleaning up…" : "Clean Up Duplicates"}
+            </button>
+          </div>
           <ul className="list-disc pl-5 mt-1 space-y-0.5">
             {duplicateVariants.map((d, i) => (
               <li key={i}>{d}</li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {cleanupResult && (
+        <div className="text-sm rounded-lg px-3 py-2 mb-3" style={{ background: "var(--good-bg)", color: "var(--good)" }}>
+          {cleanupResult}
         </div>
       )}
 
