@@ -59,6 +59,7 @@ export default function InventoryClient({
   const [showAddModal, setShowAddModal] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [duplicateVariants, setDuplicateVariants] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
@@ -218,8 +219,10 @@ export default function InventoryClient({
       }
       setSyncResult(
         `Synced: ${data.productsCreated} new product(s), ${data.productsUpdated} updated, ${data.variantsCreated} new variant(s)` +
-          (data.errors.length ? ` — ${data.errors.length} error(s): ${data.errors.join("; ")}` : ".")
+          (data.duplicateVariants?.length ? ` — ${data.duplicateVariants.length} duplicate variant group(s) found (see below).` : ".") +
+          (data.errors.length ? ` ${data.errors.length} error(s): ${data.errors.join("; ")}` : "")
       );
+      setDuplicateVariants(data.duplicateVariants ?? []);
       router.refresh();
       window.location.reload();
     } catch {
@@ -338,6 +341,17 @@ export default function InventoryClient({
           style={syncResult.startsWith("Sync failed") || syncResult.startsWith("Could not") ? { background: "var(--bad-bg)", color: "var(--bad)" } : { background: "var(--good-bg)", color: "var(--good)" }}
         >
           {syncResult}
+        </div>
+      )}
+
+      {duplicateVariants.length > 0 && (
+        <div className="text-sm rounded-lg px-3 py-2 mb-3" style={{ background: "var(--bad-bg)", color: "var(--bad)" }}>
+          <b>Duplicate variants from before the case-sensitivity fix:</b>
+          <ul className="list-disc pl-5 mt-1 space-y-0.5">
+            {duplicateVariants.map((d, i) => (
+              <li key={i}>{d}</li>
+            ))}
+          </ul>
         </div>
       )}
 

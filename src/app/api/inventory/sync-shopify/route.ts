@@ -69,6 +69,7 @@ export async function POST(req: NextRequest) {
   let updated = 0;
   let variantsCreated = 0;
   const errors: string[] = [];
+  const duplicateVariants: string[] = [];
 
   for (const sp of shopifyProducts) {
     try {
@@ -112,28 +113,53 @@ export async function POST(req: NextRequest) {
         created++;
       }
 
+      // Fetch all existing variants for this product once, so we can match
+      // case-insensitively (Shopify option casing has been inconsistent —
+      // "black" vs "Black" — which previously created duplicate "ghost"
+      // variants instead of matching the real one) and detect any
+      // already-existing duplicates from before this fix, to surface for
+      // manual cleanup rather than silently guessing which row is "real."
+      const existingVariants = await db.selectFrom("variants").selectAll().where("productId", "=", productId).execute();
+
+      const keyOf = (o1: string | null, o2: string | null, o3: string | null) =>
+        [o1, o2, o3].map((v) => (v ?? "").trim().toLowerCase()).join("␟");
+
+      const groups = new Map<string, typeof existingVariants>();
+      for (const v of existingVariants) {
+        const k = keyOf(v.option1Value, v.option2Value, v.option3Value);
+        groups.set(k, [...(groups.get(k) ?? []), v]);
+      }
+      for (const [k, group] of groups) {
+        if (group.length > 1) {
+          duplicateVariants.push(`${sp.title} — "${k.split("␟").filter(Boolean).join(" / ")}" has ${group.length} duplicate variant rows (case-mismatch bug from before this fix). Delete the extra one(s) manually from the product page.`);
+        }
+      }
+
       for (const sv of sp.variants) {
-        const existingVariant = await db
-          .selectFrom("variants")
-          .select(["id"])
-          .where("productId", "=", productId)
-          .where((eb) => eb.and([eb("option1Value", "=", sv.option1), eb("option2Value", "=", sv.option2)]))
-          .executeTakeFirst();
+        const svKey = keyOf(sv.option1, sv.option2, sv.option3);
+        const group = groups.get(svKey);
+        const existingVariant = group?.[0];
 
         if (existingVariant) {
-          // Only refresh the SKU if it's genuinely missing locally — never
-          // overwrite cost_price, sale_price, or on_hand for a variant that
-          // already exists. Those are EMS-governed per this app's own
-          // established rule (Adjust Stock / Mark Delivered are the only
-          // legitimate ways on_hand changes).
-          if (sv.sku) {
-            await db
-              .updateTable("variants")
-              .set({ sku: sv.sku })
-              .where("id", "=", existingVariant.id)
-              .where(({ eb }) => eb.or([eb("sku", "is", null), eb("sku", "=", "")]))
-              .execute();
-          }
+          // Stock is now Shopify-governed by choice — every sync overwrites
+          // on_hand with Shopify's number. Adjust Stock / delivery-based
+          // deduction are still fine to use for same-day accuracy between
+          // syncs, but the next sync will always reset to Shopify's count,
+          // since Shopify is the intended source of truth going forward.
+          // SKU and option casing also get normalized to Shopify's current
+          // values here — self-heals the case-mismatch this fix addresses.
+          await db
+            .updateTable("variants")
+            .set({
+              sku: sv.sku || existingVariant.sku,
+              option1Value: sv.option1,
+              option2Value: sv.option2,
+              option3Value: sv.option3,
+              onHand: sv.inventory_quantity,
+              updatedAt: new Date(),
+            })
+            .where("id", "=", existingVariant.id)
+            .execute();
         } else {
           await db
             .insertInto("variants")
@@ -145,7 +171,7 @@ export async function POST(req: NextRequest) {
               option3Value: sv.option3,
               salePrice: sv.price ? sv.price.toString() : null,
               costPrice: null,
-              onHand: 0,
+              onHand: sv.inventory_quantity,
             })
             .execute();
           variantsCreated++;
@@ -167,6 +193,7 @@ export async function POST(req: NextRequest) {
     productsCreated: created,
     productsUpdated: updated,
     variantsCreated,
+    duplicateVariants,
     errors,
   });
 }
