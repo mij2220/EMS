@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import AppShell from "@/components/app-shell";
 import { useSortableTable, SortArrow } from "@/lib/use-sortable-table";
 import { usePagination, PaginationControls } from "@/lib/use-pagination";
@@ -22,6 +23,7 @@ type Integration = {
   status: string;
   lastSyncAt: string | null;
   lastError: string | null;
+  syncFrequencyMinutes: number | null;
 };
 
 export default function AdminClient({ tenantName, userInitial }: { tenantName: string; userInitial: string }) {
@@ -83,6 +85,21 @@ export default function AdminClient({ tenantName, userInitial }: { tenantName: s
     }
   }, []);
 
+  const [savingFrequency, setSavingFrequency] = useState(false);
+  async function handleFrequencyChange(minutes: number) {
+    setSavingFrequency(true);
+    try {
+      await fetch("/api/admin/integrations", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: "shopify", syncFrequencyMinutes: minutes }),
+      });
+      loadIntegrations();
+    } finally {
+      setSavingFrequency(false);
+    }
+  }
+
   async function handleTestConnection() {
     setTesting(true);
     setTestResult(null);
@@ -129,6 +146,29 @@ export default function AdminClient({ tenantName, userInitial }: { tenantName: s
               {shopify?.storeUrl ? shopify.storeUrl : "Not connected yet"}
               {shopify?.lastSyncAt && ` · last verified ${new Date(shopify.lastSyncAt).toLocaleString()}`}
             </div>
+            {shopify && (
+              <div className="flex items-center gap-2 mt-2 text-sm">
+                <span style={{ color: "var(--muted)" }}>Auto-sync every</span>
+                <select
+                  value={shopify.syncFrequencyMinutes ?? 60}
+                  disabled={savingFrequency}
+                  onChange={(e) => handleFrequencyChange(Number(e.target.value))}
+                  className="rounded-lg border px-2 py-1 text-sm disabled:opacity-50"
+                  style={{ borderColor: "var(--line)" }}
+                >
+                  <option value={15}>15 minutes</option>
+                  <option value={30}>30 minutes</option>
+                  <option value={60}>1 hour</option>
+                  <option value={180}>3 hours</option>
+                  <option value={360}>6 hours</option>
+                  <option value={720}>12 hours</option>
+                  <option value={1440}>24 hours</option>
+                </select>
+                <Link href="/dashboard/admin/sync-logs" className="text-sm underline" style={{ color: "var(--muted)" }}>
+                  View sync logs
+                </Link>
+              </div>
+            )}
             {shopify?.lastError && (
               <div className="text-sm mt-1" style={{ color: "var(--bad)" }}>
                 {shopify.lastError}

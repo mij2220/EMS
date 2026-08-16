@@ -125,6 +125,20 @@ export interface IntegrationCredentials {
   tenantId: string;
 }
 
+export interface SyncLogs {
+  createdAt: Generated<Timestamp>;
+  error: string | null;
+  finishedAt: Timestamp;
+  id: Generated<string>;
+  ok: boolean;
+  provider: string;
+  startedAt: Timestamp;
+  summary: Json | null;
+  syncType: string;
+  tenantId: string;
+  trigger: string;
+}
+
 export interface Locations {
   address: string | null;
   id: Generated<string>;
@@ -342,6 +356,7 @@ export interface DB {
   roles: Roles;
   schemaMigrations: SchemaMigrations;
   stockAdjustments: StockAdjustments;
+  syncLogs: SyncLogs;
   tenants: Tenants;
   users: Users;
   variants: Variants;

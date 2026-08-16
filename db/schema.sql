@@ -372,6 +372,23 @@ create table courier_remittance_orders (
   primary key (remittance_batch_id, order_id)
 );
 
+create table sync_logs (
+  id           uuid primary key default gen_random_uuid(),
+  tenant_id    uuid not null references tenants(id),
+  provider     text not null,                 -- 'shopify' (room for other integrations later)
+  sync_type    text not null,                 -- 'inventory' | 'sales'
+  trigger      text not null,                 -- 'scheduler' | 'manual'
+  started_at   timestamptz not null,
+  finished_at  timestamptz not null,
+  created_at   timestamptz not null default now(),
+  ok           boolean not null,
+  summary      jsonb,
+  error        text
+);
+
+create index idx_sync_logs_tenant_created
+  on sync_logs (tenant_id, created_at desc);
+
 -- ============================================================================
 -- NOTES FOR THE DEV TEAM
 -- ============================================================================

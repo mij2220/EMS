@@ -9,13 +9,38 @@ export async function GET(req: NextRequest) {
 
   const integrations = await db
     .selectFrom("integrationCredentials")
-    .select(["id", "provider", "storeUrl", "status", "lastSyncAt", "lastError"])
+    .select(["id", "provider", "storeUrl", "status", "lastSyncAt", "lastError", "syncFrequencyMinutes"])
     .where("tenantId", "=", session.tenantId)
     .execute();
 
   // Deliberately no credentialsEncrypted field in the select above — never
   // sent to the client, decrypted or not.
   return NextResponse.json({ integrations });
+}
+
+export async function PATCH(req: NextRequest) {
+  const session = getSession(req);
+  if (!session) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+
+  const body = await req.json().catch(() => null);
+  const provider = body?.provider?.trim();
+  const syncFrequencyMinutes = Number(body?.syncFrequencyMinutes);
+
+  if (!provider || !Number.isFinite(syncFrequencyMinutes) || syncFrequencyMinutes < 5) {
+    return NextResponse.json({ error: "provider and a syncFrequencyMinutes of at least 5 are required." }, { status: 400 });
+  }
+
+  const result = await db
+    .updateTable("integrationCredentials")
+    .set({ syncFrequencyMinutes })
+    .where("tenantId", "=", session.tenantId)
+    .where("provider", "=", provider)
+    .executeTakeFirst();
+
+  if (Number(result.numUpdatedRows) === 0) {
+    return NextResponse.json({ error: "No integration found for that provider." }, { status: 404 });
+  }
+  return NextResponse.json({ ok: true });
 }
 
 export async function POST(req: NextRequest) {
