@@ -389,6 +389,20 @@ create table sync_logs (
 create index idx_sync_logs_tenant_created
   on sync_logs (tenant_id, created_at desc);
 
+-- See db/migrations/004_db_backups.sql for the full rationale (bytea
+-- storage inside this same database, not app-server disk, and the caveat
+-- about what this does/doesn't protect against).
+create table db_backups (
+  id                       uuid primary key default gen_random_uuid(),
+  created_at               timestamptz not null default now(),
+  created_by_user_id       uuid references users(id),
+  size_bytes               bigint not null,
+  is_pre_restore_snapshot  boolean not null default false,
+  content                  bytea not null
+);
+
+create index idx_db_backups_created_at on db_backups (created_at desc);
+
 -- ============================================================================
 -- NOTES FOR THE DEV TEAM
 -- ============================================================================

@@ -139,6 +139,15 @@ export interface SyncLogs {
   trigger: string;
 }
 
+export interface DbBackups {
+  content: Buffer;
+  createdAt: Generated<Timestamp>;
+  createdByUserId: string | null;
+  id: Generated<string>;
+  isPreRestoreSnapshot: Generated<boolean>;
+  sizeBytes: number;
+}
+
 export interface Locations {
   address: string | null;
   id: Generated<string>;
@@ -343,6 +352,7 @@ export interface DB {
   courierRemittanceOrders: CourierRemittanceOrders;
   couriers: Couriers;
   customers: Customers;
+  dbBackups: DbBackups;
   employees: Employees;
   integrationCredentials: IntegrationCredentials;
   locations: Locations;

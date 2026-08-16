@@ -8,6 +8,13 @@
 # missing on an older one). Safe to run repeatedly — already-applied
 # migrations are skipped, not re-run.
 #
+# Each step opens its own psql connection (no persistent session), and
+# Railway's public TCP proxy has been observed to drop a connection under
+# that rapid churn ("server closed the connection unexpectedly") even
+# though nothing is actually wrong with the database or the SQL — so every
+# psql call here is wrapped with automatic retries instead of failing the
+# whole script on a single transient blip.
+#
 # Usage:
 #   ./scripts/apply-migrations.sh "postgresql://..."
 #   ./scripts/apply-migrations.sh                  # reads DATABASE_URL from .env
@@ -27,8 +34,24 @@ if [ -z "$DB_URL" ]; then
   exit 1
 fi
 
+# Retries a psql invocation up to 5 times with a short backoff before
+# giving up for real. Args are passed straight through to psql.
+psql_retry() {
+  local attempt=1
+  local max_attempts=5
+  until psql "$DB_URL" "$@"; do
+    if [ "$attempt" -ge "$max_attempts" ]; then
+      echo "✗ psql failed after $max_attempts attempts — giving up."
+      return 1
+    fi
+    echo "  (connection hiccup, retrying in 2s — attempt $((attempt + 1))/$max_attempts)"
+    sleep 2
+    attempt=$((attempt + 1))
+  done
+}
+
 # Make sure the tracking table exists even on a database created before it did
-psql "$DB_URL" -c "create table if not exists schema_migrations (filename text primary key, applied_at timestamptz not null default now());" > /dev/null
+psql_retry -c "create table if not exists schema_migrations (filename text primary key, applied_at timestamptz not null default now());" > /dev/null
 
 if [ ! -d db/migrations ] || [ -z "$(ls -A db/migrations 2>/dev/null)" ]; then
   echo "✓ No migrations to apply."
@@ -38,14 +61,14 @@ fi
 APPLIED_ANY=false
 for file in $(ls db/migrations/*.sql | sort); do
   filename=$(basename "$file")
-  already=$(psql "$DB_URL" -tAc "select 1 from schema_migrations where filename='$filename';")
+  already=$(psql_retry -tAc "select 1 from schema_migrations where filename='$filename';")
   if [ "$already" = "1" ]; then
     echo "✓ $filename — already applied, skipping"
     continue
   fi
   echo "== Applying $filename =="
-  psql "$DB_URL" -f "$file"
-  psql "$DB_URL" -c "insert into schema_migrations (filename) values ('$filename');" > /dev/null
+  psql_retry -f "$file"
+  psql_retry -c "insert into schema_migrations (filename) values ('$filename');" > /dev/null
   echo "✓ $filename — applied and recorded"
   APPLIED_ANY=true
 done

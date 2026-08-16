@@ -201,6 +201,16 @@ export default function AdminClient({ tenantName, userInitial }: { tenantName: s
         piece of work not built yet. This page only handles the credential connection itself.
       </div>
 
+      <h2 className="text-lg font-bold mb-3">Database Backups</h2>
+      <div className="mockup-card mb-6 flex items-center justify-between flex-wrap gap-3">
+        <div className="text-sm" style={{ color: "var(--muted)" }}>
+          Full-database backup and restore — up to 2 most recent kept, Owner role only.
+        </div>
+        <Link href="/dashboard/admin/backups" className="mockup-btn mockup-btn-ghost">
+          Open Database Backups
+        </Link>
+      </div>
+
       <h2 className="text-lg font-bold mb-3">Users</h2>
       <div className="mb-4">
         <input
