@@ -1,25 +1,12 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { verifySession, SESSION_COOKIE } from "@/lib/auth";
-import { getSessionUser } from "@/lib/session-user";
-import { db } from "@/db";
-import ReportsClient from "./reports-client";
 
-export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ tab?: string; from?: string }> }) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
-  const session = token ? verifySession(token) : null;
-  if (!session) redirect("/login");
-
-  const user = await getSessionUser(session);
-  const { tab, from } = await searchParams;
-
-  return (
-    <ReportsClient
-      tenantName={user.tenantName}
-      userInitial={user.name.charAt(0).toUpperCase()}
-      initialTab={tab}
-      activeNavKey={from ?? "inventory-reports"}
-    />
-  );
+// The old shared /dashboard/reports?tab=... page is retired — split into
+// four dedicated pages (see ./inventory, ./sales, ./accounts, ./courier)
+// after an unresolved bug where the browser reliably rendered the wrong
+// tab despite provably-correct server output, reproducing across multiple
+// browsers and incognito. Separate real routes sidestep that class of
+// problem entirely rather than continuing to chase it. This redirect just
+// covers anyone with the old URL bookmarked.
+export default function ReportsRedirect() {
+  redirect("/dashboard/reports/inventory");
 }
