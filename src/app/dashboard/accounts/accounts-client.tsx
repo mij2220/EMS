@@ -249,29 +249,82 @@ function useFormSubmit(endpoint: string, onSaved: () => void, onClose: () => voi
   return { submit, error, saving };
 }
 
+type ExpenseCategory = { id: string; name: string; subcategories: { id: string; name: string }[] };
+
 function ExpenseModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const { submit, error, saving } = useFormSubmit("/api/accounts/vouchers/expense", onSaved, onClose);
+  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+  const [categoryId, setCategoryId] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/accounts/categories")
+      .then((r) => r.json())
+      .then((d) => {
+        setCategories(d.categories ?? []);
+        if (d.categories?.length) setCategoryId(d.categories[0].id);
+      });
+  }, []);
+
+  const selectedCategory = categories.find((c) => c.id === categoryId);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setSaving(true);
+    const f = new FormData(e.currentTarget);
+    try {
+      const res = await fetch("/api/accounts/vouchers/expense", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          categoryId,
+          subcategoryId: f.get("subcategoryId") || null,
+          amount: f.get("amount"),
+          paidFrom: f.get("paidFrom"),
+          description: f.get("description"),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Something went wrong.");
+        return;
+      }
+      onSaved();
+      onClose();
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <ModalShell title="Add Expense" onClose={onClose}>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          const f = new FormData(e.currentTarget);
-          submit({ category: f.get("category"), amount: f.get("amount"), paidFrom: f.get("paidFrom"), description: f.get("description") });
-        }}
-        className="space-y-3"
-      >
+      <form onSubmit={handleSubmit} className="space-y-3">
         <div>
           <label className="block text-xs font-semibold mb-1">Category</label>
-          <select name="category" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }}>
-            <option>Utility Bill</option>
-            <option>Shipping / Courier Fee</option>
-            <option>Packaging</option>
-            <option>Rent</option>
-            <option>Marketing</option>
-            <option>Miscellaneous</option>
+          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }}>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
           </select>
         </div>
+        {selectedCategory && selectedCategory.subcategories.length > 0 && (
+          <div>
+            <label className="block text-xs font-semibold mb-1">Sub-category</label>
+            <select name="subcategoryId" className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }}>
+              <option value="">— None —</option>
+              {selectedCategory.subcategories.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold mb-1">Amount (Rs)</label>
@@ -292,7 +345,7 @@ function ExpenseModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
         {error && <div className="text-sm rounded-lg px-3 py-2" style={{ background: "var(--bad-bg)", color: "var(--bad)" }}>{error}</div>}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="mockup-btn mockup-btn-ghost">Cancel</button>
-          <button type="submit" disabled={saving} className="mockup-btn mockup-btn-primary disabled:opacity-50">{saving ? "Saving…" : "Save Expense"}</button>
+          <button type="submit" disabled={saving || !categoryId} className="mockup-btn mockup-btn-primary disabled:opacity-50">{saving ? "Saving…" : "Save Expense"}</button>
         </div>
       </form>
     </ModalShell>

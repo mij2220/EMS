@@ -100,6 +100,15 @@ export interface Customers {
   tenantId: string;
 }
 
+export interface DbBackups {
+  content: Buffer;
+  createdAt: Generated<Timestamp>;
+  createdByUserId: string | null;
+  id: Generated<string>;
+  isPreRestoreSnapshot: Generated<boolean>;
+  sizeBytes: Int8;
+}
+
 export interface Employees {
   advanceBalance: Generated<Numeric>;
   baseSalary: Numeric | null;
@@ -110,6 +119,21 @@ export interface Employees {
   status: Generated<string>;
   tenantId: string;
   userId: string | null;
+}
+
+export interface ExpenseCategories {
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  name: string;
+  tenantId: string;
+}
+
+export interface ExpenseSubcategories {
+  categoryId: string;
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  name: string;
+  tenantId: string;
 }
 
 export interface IntegrationCredentials {
@@ -123,29 +147,6 @@ export interface IntegrationCredentials {
   storeUrl: string | null;
   syncFrequencyMinutes: Generated<number | null>;
   tenantId: string;
-}
-
-export interface SyncLogs {
-  createdAt: Generated<Timestamp>;
-  error: string | null;
-  finishedAt: Timestamp;
-  id: Generated<string>;
-  ok: boolean;
-  provider: string;
-  startedAt: Timestamp;
-  summary: Json | null;
-  syncType: string;
-  tenantId: string;
-  trigger: string;
-}
-
-export interface DbBackups {
-  content: Buffer;
-  createdAt: Generated<Timestamp>;
-  createdByUserId: string | null;
-  id: Generated<string>;
-  isPreRestoreSnapshot: Generated<boolean>;
-  sizeBytes: number;
 }
 
 export interface Locations {
@@ -267,6 +268,20 @@ export interface StockAdjustments {
   variantId: string;
 }
 
+export interface SyncLogs {
+  createdAt: Generated<Timestamp>;
+  error: string | null;
+  finishedAt: Timestamp;
+  id: Generated<string>;
+  ok: boolean;
+  provider: string;
+  startedAt: Timestamp;
+  summary: Json | null;
+  syncType: string;
+  tenantId: string;
+  trigger: string;
+}
+
 export interface Tenants {
   address: string | null;
   businessName: string;
@@ -354,6 +369,8 @@ export interface DB {
   customers: Customers;
   dbBackups: DbBackups;
   employees: Employees;
+  expenseCategories: ExpenseCategories;
+  expenseSubcategories: ExpenseSubcategories;
   integrationCredentials: IntegrationCredentials;
   locations: Locations;
   orderItems: OrderItems;

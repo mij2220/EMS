@@ -18,6 +18,7 @@ const NAV_ITEMS: { key: string; label: string; icon: string; href: string; sub?:
   { key: "accounts", label: "Accounts", icon: "₨", href: "/dashboard/accounts" },
   { key: "vendors", label: "Vendors", icon: "▸", href: "/dashboard/vendors", sub: true },
   { key: "employees", label: "Employees", icon: "▸", href: "/dashboard/employees", sub: true },
+  { key: "categories", label: "Categories", icon: "▸", href: "/dashboard/accounts/categories", sub: true },
   { key: "account-reports", label: "Reports", icon: "▸", href: "/dashboard/reports/accounts", sub: true },
   { key: "courier", label: "Courier", icon: "⛟", href: "/dashboard/courier" },
   { key: "courier-reports", label: "Reports", icon: "▸", href: "/dashboard/reports/courier", sub: true },

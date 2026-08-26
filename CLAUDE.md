@@ -3,6 +3,26 @@
 Read this first. This project has a long build history in a previous chat that got unwieldy —
 this file exists so a fresh conversation can pick up accurately without re-deriving everything.
 
+## ⚠️ IMPORTANT — this project has been worked on by more than one tool
+
+As of this note, real Shopify order sync, database backup/restore, and sync-logging features
+exist in this codebase (`src/lib/shopify-orders-sync.ts`, `src/lib/db-backup.ts`,
+`src/lib/sync-logs.ts`, `/dashboard/admin/backups`, `/dashboard/admin/sync-logs`,
+`src/instrumentation.ts`, migrations `003_sync_logs.sql` and `004_db_backups.sql`) that were
+**built by a different tool, not by the Claude session that maintains this file** — most likely
+Claude Code, based on the code style and `nixpacks.toml`/`instrumentation.ts` presence. That work
+was never documented here, which caused a real, confusing incident: a Claude.ai chat's local
+deploy script and a Claude Code session's local changes diverged, and neither this file nor the
+deploy scripts had any way of knowing about the other's work until the user manually compared
+against the actual GitHub repo.
+
+**If you're picking this up fresh**: don't assume this file is a complete picture of the
+codebase. Check the actual repo state (`git log`, `db/migrations/`, `src/lib/`) before trusting
+this document's feature list as exhaustive — especially anything Shopify-order-sync, backup, or
+sync-log related, which this file was never updated to describe. This project's client uses the
+live app with real data — verify against the real GitHub repo before making changes, the same
+way this note itself came from doing exactly that.
+
 ## What this is
 A Next.js (App Router) full-stack app — frontend + backend API routes in one codebase
 (`src/app/api/**/route.ts`, ~30 real endpoints) — backed by PostgreSQL via Kysely. Built against
@@ -15,6 +35,28 @@ screen should look like or contain, extract the real structure/data from that fi
 customers, accounts, account-reports, vendors, employees, courier, courier-reports,
 product-detail, order-detail, customer-detail, courier-detail, voucher-detail, admin) —
 don't reconstruct from memory or assumption.
+
+## Expense Category / Sub-category — real Chart-of-Accounts style structure (this session)
+
+Replaced the flat hardcoded 6-item Expense category dropdown with real `expense_categories` and
+`expense_subcategories` tables, full CRUD via `/dashboard/accounts/categories` (add/edit/delete
+both levels), and a cascading Category → Sub-category selector on the Expense voucher modal.
+Migration is `005_expense_categories.sql` — correctly numbered after the real `004_db_backups.sql`
+already in production, NOT `003` (an earlier attempt collided with the other tool's
+`003_sync_logs.sql`, which is part of what caused the confusion described above).
+
+Account naming matches the existing pattern everywhere else: `Expense — {category}` alone, or
+`Expense — {category} — {sub}` when a sub-category is chosen. Renaming cascades to the account
+name (same principle as renaming a vendor) — verified for real against the actual GitHub repo
+(not a stale local copy): created a real voucher under Marketing → Meta Ads, renamed the category
+to "Digital Marketing", confirmed the same voucher's account correctly updated, not orphaned.
+Delete is blocked if anything under a category — the category itself or any sub-category — has
+real vouchers, with the error naming the specific thing that's blocking it.
+
+**Critically, this was built and tested against a fresh `git clone` of the real GitHub repo**,
+not the local zip from a prior chat session — confirmed the existing Shopify sync, DB backup, and
+sync-log features (built by the other tool) still work after this change, by hitting their pages
+directly (`/dashboard/admin/backups`, `/dashboard/admin/sync-logs`) and getting clean 200s.
 
 ## Current build status (be precise about this — the user has been burned by overclaiming)
 

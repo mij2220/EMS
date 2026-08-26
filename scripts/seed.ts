@@ -23,6 +23,17 @@ async function main() {
     .executeTakeFirstOrThrow();
   const tenantId = tenant.id;
 
+  // ---------- Expense Categories/Sub-categories (the previously-hardcoded list, now real rows) ----------
+  const categoryNames = ["Utility Bill", "Shipping / Courier Fee", "Packaging", "Rent", "Marketing", "Miscellaneous"];
+  const categoryIds: Record<string, string> = {};
+  for (const name of categoryNames) {
+    const cat = await db.insertInto("expenseCategories").values({ tenantId, name }).returning(["id"]).executeTakeFirstOrThrow();
+    categoryIds[name] = cat.id;
+  }
+  for (const name of ["Meta Ads", "Google Ads", "TikTok Ads"]) {
+    await db.insertInto("expenseSubcategories").values({ tenantId, categoryId: categoryIds["Marketing"], name }).execute();
+  }
+
   // ---------- Role + Permissions (Owner/Admin — full access to every module) ----------
   const role = await db
     .insertInto("roles")

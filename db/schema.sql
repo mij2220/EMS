@@ -241,6 +241,29 @@ create table employees (
   created_at      timestamptz not null default now()
 );
 
+-- Chart-of-accounts style structure for Expense vouchers: a Category (e.g.
+-- "Marketing") can have Sub-categories (e.g. "Meta Ads", "Google Ads").
+-- The Expense voucher's actual ledger account name is built from these —
+-- "Expense — Marketing" alone, or "Expense — Marketing — Meta Ads" when a
+-- sub-category is chosen — so renaming here also needs to rename the
+-- matching account(s), same pattern as renaming a vendor.
+create table expense_categories (
+  id          uuid primary key default gen_random_uuid(),
+  tenant_id   uuid not null references tenants(id),
+  name        text not null,
+  created_at  timestamptz not null default now(),
+  unique (tenant_id, name)
+);
+
+create table expense_subcategories (
+  id            uuid primary key default gen_random_uuid(),
+  tenant_id     uuid not null references tenants(id),
+  category_id   uuid not null references expense_categories(id) on delete cascade,
+  name          text not null,
+  created_at    timestamptz not null default now(),
+  unique (category_id, name)
+);
+
 create table vouchers (
   id                uuid primary key default gen_random_uuid(),
   tenant_id         uuid not null references tenants(id),
