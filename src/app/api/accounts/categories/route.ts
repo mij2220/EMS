@@ -8,14 +8,14 @@ export async function GET(req: NextRequest) {
 
   const categories = await db
     .selectFrom("expenseCategories")
-    .select(["id", "name", "createdAt"])
+    .select(["id", "name", "status", "createdAt"])
     .where("tenantId", "=", session.tenantId)
     .orderBy("name")
     .execute();
 
   const subcategories = await db
     .selectFrom("expenseSubcategories")
-    .select(["id", "categoryId", "name", "createdAt"])
+    .select(["id", "categoryId", "name", "status", "createdAt"])
     .where("tenantId", "=", session.tenantId)
     .orderBy("name")
     .execute();

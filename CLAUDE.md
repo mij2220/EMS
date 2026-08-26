@@ -58,6 +58,32 @@ not the local zip from a prior chat session — confirmed the existing Shopify s
 sync-log features (built by the other tool) still work after this change, by hitting their pages
 directly (`/dashboard/admin/backups`, `/dashboard/admin/sync-logs`) and getting clean 200s.
 
+### Follow-up round: a real UI bug, plus Disable/Enable instead of destructive delete
+
+**Bug found and fixed**: clicking "+ Sub-category" set the right state but the input field that
+should appear was nested inside a *separate* `expanded` conditional that only the category-name
+click toggles — so the button visibly focused but nothing appeared. Fixed by having the button
+also expand the category. This wasn't a subcategory-creation bug at all; the API always worked
+correctly (verified directly via curl before touching any frontend code) — it was purely that the
+input to actually create one was invisible.
+
+**Explicit design decision, not just built on request**: the user initially asked for deleting a
+category to cascade-delete every voucher ever posted to it. Recommended against this directly —
+retroactively deleting posted vouchers would silently change Cash Balance and past Expense Reports
+on a live client's real data, which no serious accounting system does (QuickBooks/Xero included).
+Built the same Disable-instead-of-Delete pattern already used for Vendors/Employees instead:
+`expense_categories`/`expense_subcategories` gained a `status` column
+(`006_expense_category_status.sql`). Delete stays exactly as before — blocked if any real voucher
+exists under it. Disable is new — hides it from the Expense voucher's dropdown for *future* use
+only. Verified for real: posted a real Rs 3,000 expense under Meta Ads, confirmed Delete is still
+blocked, confirmed Disable succeeds, confirmed the Rs 3,000 voucher and Cash Balance are completely
+unaffected afterward, and confirmed the disabled sub-category is correctly excluded from what a
+new Expense voucher's dropdown would show (checked the exact filter logic against real API data).
+
+Also cleaned up `db/migrations/003_expense_categories.sql` — an orphaned file from an earlier
+numbering attempt that got accidentally swept into a commit; harmless (idempotent `if not exists`)
+but confusing clutter, removed.
+
 ## Current build status (be precise about this — the user has been burned by overclaiming)
 
 **Fully rebuilt to match the mockup exactly (real data, real columns, real filters, tested):**

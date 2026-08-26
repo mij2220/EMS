@@ -249,7 +249,7 @@ function useFormSubmit(endpoint: string, onSaved: () => void, onClose: () => voi
   return { submit, error, saving };
 }
 
-type ExpenseCategory = { id: string; name: string; subcategories: { id: string; name: string }[] };
+type ExpenseCategory = { id: string; name: string; status: string; subcategories: { id: string; name: string; status: string }[] };
 
 function ExpenseModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
@@ -261,8 +261,11 @@ function ExpenseModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
     fetch("/api/accounts/categories")
       .then((r) => r.json())
       .then((d) => {
-        setCategories(d.categories ?? []);
-        if (d.categories?.length) setCategoryId(d.categories[0].id);
+        const active: ExpenseCategory[] = (d.categories ?? [])
+          .filter((c: ExpenseCategory) => c.status === "active")
+          .map((c: ExpenseCategory) => ({ ...c, subcategories: c.subcategories.filter((s) => s.status === "active") }));
+        setCategories(active);
+        if (active.length) setCategoryId(active[0].id);
       });
   }, []);
 

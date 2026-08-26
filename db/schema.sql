@@ -251,6 +251,7 @@ create table expense_categories (
   id          uuid primary key default gen_random_uuid(),
   tenant_id   uuid not null references tenants(id),
   name        text not null,
+  status      text not null default 'active',      -- 'active' | 'inactive' — inactive instead of deleted once real vouchers exist under it; historical vouchers are never touched
   created_at  timestamptz not null default now(),
   unique (tenant_id, name)
 );
@@ -260,6 +261,7 @@ create table expense_subcategories (
   tenant_id     uuid not null references tenants(id),
   category_id   uuid not null references expense_categories(id) on delete cascade,
   name          text not null,
+  status        text not null default 'active',      -- 'active' | 'inactive' — same disable-not-delete pattern as the parent category
   created_at    timestamptz not null default now(),
   unique (category_id, name)
 );

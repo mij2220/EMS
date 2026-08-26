@@ -125,6 +125,7 @@ export interface ExpenseCategories {
   createdAt: Generated<Timestamp>;
   id: Generated<string>;
   name: string;
+  status: Generated<string>;
   tenantId: string;
 }
 
@@ -133,6 +134,7 @@ export interface ExpenseSubcategories {
   createdAt: Generated<Timestamp>;
   id: Generated<string>;
   name: string;
+  status: Generated<string>;
   tenantId: string;
 }
 

@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import AppShell from "@/components/app-shell";
 
-type Subcategory = { id: string; name: string };
-type Category = { id: string; name: string; subcategories: Subcategory[] };
+type Subcategory = { id: string; name: string; status: string };
+type Category = { id: string; name: string; status: string; subcategories: Subcategory[] };
 
 export default function CategoriesClient({ tenantName, userInitial }: { tenantName: string; userInitial: string }) {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -66,8 +66,21 @@ export default function CategoriesClient({ tenantName, userInitial }: { tenantNa
 
   async function deleteCategory(cat: Category) {
     setError(null);
-    if (!confirm(`Delete category "${cat.name}"${cat.subcategories.length ? ` and its ${cat.subcategories.length} sub-categor${cat.subcategories.length === 1 ? "y" : "ies"}` : ""}?`)) return;
+    if (!confirm(`Permanently delete category "${cat.name}"${cat.subcategories.length ? ` and its ${cat.subcategories.length} sub-categor${cat.subcategories.length === 1 ? "y" : "ies"}` : ""}? This cannot be undone. (Blocked automatically if any real expense has ever been posted to it — use Disable instead for those.)`)) return;
     const res = await fetch(`/api/accounts/categories/${cat.id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) return setError(data.error);
+    load();
+  }
+
+  async function toggleCategoryStatus(cat: Category) {
+    setError(null);
+    const newStatus = cat.status === "active" ? "inactive" : "active";
+    const res = await fetch(`/api/accounts/categories/${cat.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    });
     const data = await res.json();
     if (!res.ok) return setError(data.error);
     load();
@@ -104,8 +117,21 @@ export default function CategoriesClient({ tenantName, userInitial }: { tenantNa
 
   async function deleteSubcategory(sub: Subcategory) {
     setError(null);
-    if (!confirm(`Delete sub-category "${sub.name}"?`)) return;
+    if (!confirm(`Permanently delete sub-category "${sub.name}"? This cannot be undone. (Blocked automatically if any real expense has ever been posted to it — use Disable instead.)`)) return;
     const res = await fetch(`/api/accounts/subcategories/${sub.id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) return setError(data.error);
+    load();
+  }
+
+  async function toggleSubStatus(sub: Subcategory) {
+    setError(null);
+    const newStatus = sub.status === "active" ? "inactive" : "active";
+    const res = await fetch(`/api/accounts/subcategories/${sub.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    });
     const data = await res.json();
     if (!res.ok) return setError(data.error);
     load();
@@ -155,6 +181,11 @@ export default function CategoriesClient({ tenantName, userInitial }: { tenantNa
                 ) : (
                   <span className="font-semibold">{cat.name}</span>
                 )}
+                {cat.status === "inactive" && (
+                  <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "var(--bad-bg)", color: "var(--bad)" }}>
+                    Disabled
+                  </span>
+                )}
                 <span className="text-xs" style={{ color: "var(--muted)" }}>
                   {cat.subcategories.length > 0 ? `${cat.subcategories.length} sub-categor${cat.subcategories.length === 1 ? "y" : "ies"}` : "no sub-categories"}
                 </span>
@@ -167,11 +198,21 @@ export default function CategoriesClient({ tenantName, userInitial }: { tenantNa
                   </>
                 ) : (
                   <>
-                    <button onClick={() => setAddingSubTo(addingSubTo === cat.id ? null : cat.id)} className="text-xs font-semibold" style={{ color: "var(--navy)" }}>
+                    <button
+                      onClick={() => {
+                        setAddingSubTo(addingSubTo === cat.id ? null : cat.id);
+                        setExpanded((prev) => new Set(prev).add(cat.id));
+                      }}
+                      className="text-xs font-semibold"
+                      style={{ color: "var(--navy)" }}
+                    >
                       + Sub-category
                     </button>
                     <button onClick={() => setEditingCategory({ id: cat.id, name: cat.name })} className="text-xs font-semibold" style={{ color: "var(--navy)" }}>
                       Edit
+                    </button>
+                    <button onClick={() => toggleCategoryStatus(cat)} className="text-xs font-semibold" style={{ color: "var(--muted)" }}>
+                      {cat.status === "active" ? "Disable" : "Enable"}
                     </button>
                     <button onClick={() => deleteCategory(cat)} className="text-xs font-semibold" style={{ color: "var(--bad)" }}>
                       Delete
@@ -218,7 +259,14 @@ export default function CategoriesClient({ tenantName, userInitial }: { tenantNa
                           style={{ borderColor: "var(--line)" }}
                         />
                       ) : (
-                        <span className="text-sm">— {sub.name}</span>
+                        <span className="text-sm flex items-center gap-2">
+                          — {sub.name}
+                          {sub.status === "inactive" && (
+                            <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "var(--bad-bg)", color: "var(--bad)" }}>
+                              Disabled
+                            </span>
+                          )}
+                        </span>
                       )}
                       <div className="flex gap-2">
                         {editingSub?.id === sub.id ? (
@@ -229,6 +277,9 @@ export default function CategoriesClient({ tenantName, userInitial }: { tenantNa
                         ) : (
                           <>
                             <button onClick={() => setEditingSub({ id: sub.id, name: sub.name })} className="text-xs font-semibold" style={{ color: "var(--navy)" }}>Edit</button>
+                            <button onClick={() => toggleSubStatus(sub)} className="text-xs font-semibold" style={{ color: "var(--muted)" }}>
+                              {sub.status === "active" ? "Disable" : "Enable"}
+                            </button>
                             <button onClick={() => deleteSubcategory(sub)} className="text-xs font-semibold" style={{ color: "var(--bad)" }}>Delete</button>
                           </>
                         )}

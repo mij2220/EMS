@@ -32,7 +32,17 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const body = await req.json().catch(() => null);
   const name = body?.name?.trim();
-  if (!name) return NextResponse.json({ error: "Name is required." }, { status: 400 });
+  const status = body?.status;
+
+  if (status !== undefined) {
+    if (status !== "active" && status !== "inactive") {
+      return NextResponse.json({ error: 'Status must be "active" or "inactive".' }, { status: 400 });
+    }
+    await db.updateTable("expenseSubcategories").set({ status }).where("id", "=", id).execute();
+    if (!name) return NextResponse.json({ ok: true });
+  }
+
+  if (!name) return NextResponse.json({ ok: true });
   if (name === sub.name) return NextResponse.json({ ok: true });
 
   const clash = await db
