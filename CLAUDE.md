@@ -375,6 +375,17 @@ before assuming), so new values like `"asset"`, `"vendor_payment"`, `"employee_a
 `"commission"`, `"customer_refund"` are just data, not schema changes. `advance_balance` already
 existed. Deploying this round is pure code — no `db/migrations/` file, no migration prompt needed.
 
+## Expense voucher now has a real Date field (was hardcoded to "today")
+
+`voucherDate` was hardcoded server-side to `new Date().toISOString().slice(0, 10)` — every Expense
+was silently posted as today's date regardless of when the actual expense happened, with no field
+in the UI to override it. Fixed on both sides: the route now accepts a real `voucherDate` from the
+request (falling back to today only if genuinely not provided), and the modal now has a Date input
+matching the same pattern already used on Vendor Purchase. Verified for real: posted an expense
+dated 2026-07-01 (a real backdate, not today), confirmed it's stored and returned exactly as
+2026-07-01, not silently overwritten — and separately confirmed omitting the date still correctly
+falls back to today, so nothing that depended on the old default behavior broke.
+
 ## Real bug fixed: voucher photo was wrongly required on edit
 
 Editing a voucher without selecting a new photo was being rejected with "That file doesn't look

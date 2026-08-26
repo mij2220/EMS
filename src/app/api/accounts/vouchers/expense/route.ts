@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
   const subcategoryId = body?.subcategoryId || null;
   const amount = Number(body?.amount);
   const paidFrom = body?.paidFrom === "Bank" ? "Bank" : "Cash";
+  const voucherDate = body?.voucherDate || new Date().toISOString().slice(0, 10);
 
   if (!categoryId || !amount || amount <= 0) {
     return NextResponse.json({ error: "categoryId and a positive amount are required." }, { status: 400 });
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
       tenantId: session.tenantId,
       voucherNumber,
       voucherType: "expense",
-      voucherDate: new Date().toISOString().slice(0, 10),
+      voucherDate,
       debitAccountId,
       creditAccountId,
       amount: amount.toString(),

@@ -256,6 +256,7 @@ function ExpenseModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
   const [categoryId, setCategoryId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const today = new Date().toISOString().slice(0, 10);
 
   useEffect(() => {
     fetch("/api/accounts/categories")
@@ -286,6 +287,7 @@ function ExpenseModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
           amount: f.get("amount"),
           paidFrom: f.get("paidFrom"),
           description: f.get("description"),
+          voucherDate: f.get("voucherDate"),
         }),
       });
       const data = await res.json();
@@ -305,6 +307,10 @@ function ExpenseModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
   return (
     <ModalShell title="Add Expense" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <label className="block text-xs font-semibold mb-1">Date</label>
+          <input name="voucherDate" type="date" defaultValue={today} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }} />
+        </div>
         <div>
           <label className="block text-xs font-semibold mb-1">Category</label>
           <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--line)" }}>
