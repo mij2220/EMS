@@ -266,6 +266,21 @@ create table expense_subcategories (
   unique (category_id, name)
 );
 
+-- A dedicated, per-tenant atomic counter for voucher numbers — stores "the
+-- last number used" for that tenant. Replaces a "SELECT count(*)+1"
+-- approach that was provably unsafe under real concurrent access — two
+-- requests close together could both read the same count before either
+-- committed, then collide on the unique constraint on
+-- (tenant_id, voucher_number). Updated via a single atomic
+-- INSERT ... ON CONFLICT DO UPDATE ... RETURNING statement, which Postgres
+-- guarantees is safe under concurrency via row-level locking — no
+-- SELECT-then-INSERT race is possible. See nextVoucherNumber in
+-- src/lib/accounts-helpers.ts.
+create table voucher_counters (
+  tenant_id    uuid primary key references tenants(id),
+  next_number  integer not null default 0
+);
+
 create table vouchers (
   id                uuid primary key default gen_random_uuid(),
   tenant_id         uuid not null references tenants(id),

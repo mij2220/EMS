@@ -341,6 +341,11 @@ export interface Vendors {
   tenantId: string;
 }
 
+export interface VoucherCounters {
+  nextNumber: Generated<number>;
+  tenantId: string;
+}
+
 export interface Vouchers {
   amount: Numeric;
   attachmentUrl: string | null;
@@ -390,5 +395,6 @@ export interface DB {
   users: Users;
   variants: Variants;
   vendors: Vendors;
+  voucherCounters: VoucherCounters;
   vouchers: Vouchers;
 }

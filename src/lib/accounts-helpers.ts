@@ -3,13 +3,9 @@ import type { Kysely } from "kysely";
 import type { DB } from "@/db/types";
 
 // Both helpers default to the shared `db` connection, but accept an explicit
-// Kysely instance too — critically, this needs to be the SAME transaction
-// object (`trx`) when called from inside a `db.transaction().execute(...)`
-// block. Calling these with the outer `db` from inside a transaction is a
-// real bug that was caught during testing: the count-based voucher numbering
-// can't see a voucher inserted earlier in the same uncommitted transaction,
-// so two vouchers created in one transaction would both compute the same
-// "next" number and collide on the unique constraint.
+// Kysely instance too — needs to be the SAME transaction object (`trx`) when
+// called from inside a `db.transaction().execute(...)` block, so multiple
+// calls within one transaction see each other's not-yet-committed writes.
 export async function findOrCreateAccount(tenantId: string, name: string, type: string, conn: Kysely<DB> = db) {
   const existing = await conn
     .selectFrom("accounts")
@@ -27,11 +23,25 @@ export async function findOrCreateAccount(tenantId: string, name: string, type: 
   return created.id;
 }
 
+// Generates the next voucher number atomically via a dedicated per-tenant
+// counter table (voucher_counters). The stored value is "the last number
+// used" for that tenant. A single INSERT ... ON CONFLICT DO UPDATE ...
+// RETURNING statement either creates the row at 1 (first voucher ever for
+// this tenant) or increments the existing row and returns the new value —
+// Postgres guarantees this whole operation is safe under concurrent access
+// via row-level locking, so two simultaneous requests can never be handed
+// the same number. This replaced a "SELECT count(*)+1" approach that was
+// provably unsafe: it caused a real production incident (duplicate key
+// violation on VCH-0044, 2026-08-26) the moment two voucher creations
+// happened close together. Do not go back to a count-based approach here —
+// it will reintroduce exactly that bug.
 export async function nextVoucherNumber(tenantId: string, conn: Kysely<DB> = db) {
-  const count = await conn
-    .selectFrom("vouchers")
-    .select(({ fn }) => fn.count<string>("id").as("count"))
-    .where("tenantId", "=", tenantId)
+  const result = await conn
+    .insertInto("voucherCounters")
+    .values({ tenantId, nextNumber: 1 })
+    .onConflict((oc) => oc.column("tenantId").doUpdateSet((eb) => ({ nextNumber: eb("voucherCounters.nextNumber", "+", 1) })))
+    .returning("nextNumber")
     .executeTakeFirstOrThrow();
-  return `VCH-${(Number(count.count) + 1).toString().padStart(4, "0")}`;
+
+  return `VCH-${result.nextNumber.toString().padStart(4, "0")}`;
 }

@@ -375,6 +375,40 @@ before assuming), so new values like `"asset"`, `"vendor_payment"`, `"employee_a
 `"commission"`, `"customer_refund"` are just data, not schema changes. `advance_balance` already
 existed. Deploying this round is pure code — no `db/migrations/` file, no migration prompt needed.
 
+## REAL PRODUCTION INCIDENT — voucher numbering race condition (2026-08-26)
+
+**What broke, for real, on the live client's database**: `Add Expense` failed with "Could not
+reach the server" — the actual server-side error (visible in Railway's deploy logs, not the UI)
+was `duplicate key value violates unique constraint "vouchers_tenant_id_voucher_number_key"` on
+`VCH-0044`. Root cause: `nextVoucherNumber()` computed the next number via
+`SELECT count(*)+1` — provably unsafe under concurrent requests, since two requests close
+together can both read the same count before either commits, and both then try to insert the
+same voucher number. This bug existed since early in this project and was only ever partially
+patched before (a `trx`-parameter fix for two-vouchers-in-one-transaction, e.g. split payments) —
+that fix never addressed the deeper problem of two *separate* concurrent requests, which is what
+actually happened in production.
+
+**The real fix**: replaced the counting approach entirely with a dedicated `voucher_counters`
+table (one row per tenant, storing "the last number used") and a single atomic
+`INSERT ... ON CONFLICT DO UPDATE ... RETURNING` statement — Postgres guarantees this is safe
+under concurrency via row-level locking, so two simultaneous requests genuinely cannot be handed
+the same number. Migration `007_voucher_counter.sql` seeds each tenant's counter from their real
+highest existing voucher number (not from zero — that would eventually re-collide with real
+history once the counter caught back up).
+
+**How this was actually verified, not just reasoned about**: recreated the exact production
+scenario locally — a tenant with real vouchers up to VCH-0048, an empty counter table (the
+pre-migration state) — ran the migration, confirmed the counter seeded to exactly 48, confirmed
+the next voucher correctly became VCH-0049. Then fired 20 genuinely concurrent requests
+(backgrounded curl processes, not sequential) at the Expense endpoint simultaneously — the exact
+class of scenario that crashed production — and confirmed all 20 succeeded with a complete,
+gap-free, zero-duplicate sequence (VCH-0050 through VCH-0069, verified via
+`count(*) = count(distinct voucher_number)` across the whole table).
+
+**If you ever see this exact error again**: it means something reintroduced a count-based or
+otherwise non-atomic numbering scheme somewhere. Do not patch around it — go back to the atomic
+counter pattern in `nextVoucherNumber` (`src/lib/accounts-helpers.ts`).
+
 ## Expense voucher now has a real Date field (was hardcoded to "today")
 
 `voucherDate` was hardcoded server-side to `new Date().toISOString().slice(0, 10)` — every Expense
