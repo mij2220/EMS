@@ -9,8 +9,14 @@ import { getSession } from "@/lib/require-session";
 // one-time code that we exchange server-side for the real token.
 //
 // Scopes requested must exactly match (or be a subset of) what's configured
-// for this app in Shopify's Dev Dashboard — see SHOPIFY_SETUP.md.
-const SHOPIFY_SCOPES = "read_products,write_products";
+// for this app in Shopify's Dev Dashboard — see SHOPIFY_OAUTH_SETUP.md.
+// read_inventory added so inventory sync can look up InventoryItem.cost
+// (cost-per-item lives on a separate resource from /products.json — see
+// fetchInventoryItemCosts in shopify-inventory-sync.ts). Anyone already
+// connected needs to reconnect after this ships — an old token only carries
+// the scopes it was originally granted with, so it won't have inventory
+// read access until Connect Shopify is run again.
+const SHOPIFY_SCOPES = "read_products,write_products,read_inventory";
 
 export async function GET(req: NextRequest) {
   const session = getSession(req);

@@ -221,6 +221,7 @@ export default function InventoryClient({
       }
       setSyncResult(
         `Synced: ${data.productsCreated} new product(s), ${data.productsUpdated} updated, ${data.variantsCreated} new variant(s)` +
+          (data.costsBackfilled ? `, cost filled in for ${data.costsBackfilled} variant(s) that didn't have one yet` : "") +
           (data.duplicateVariants?.length ? ` — ${data.duplicateVariants.length} duplicate variant group(s) found (see below).` : ".") +
           (data.errors.length ? ` ${data.errors.length} error(s): ${data.errors.join("; ")}` : "")
       );

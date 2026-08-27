@@ -8,6 +8,7 @@ type ShopifyVariant = {
   option3: string | null;
   price: string;
   inventory_quantity: number;
+  inventory_item_id: number | null;
 };
 type ShopifyProduct = {
   id: number;
@@ -24,9 +25,43 @@ export type InventorySyncResult = {
   productsCreated: number;
   productsUpdated: number;
   variantsCreated: number;
+  costsBackfilled: number;
   duplicateVariants: string[];
   errors: string[];
 };
+
+/**
+ * Shopify's /products.json endpoint never includes cost — cost-per-item
+ * lives on a separate InventoryItem resource. This fetches it in batches
+ * (Shopify allows up to 250 ids per call) keyed by inventory_item_id so the
+ * sync loop can look costs up by variant without a request-per-variant.
+ * Returns an empty map (not a throw) on any failure — cost is a nice-to-have
+ * backfill, and a failure here should never abort the rest of the sync.
+ */
+async function fetchInventoryItemCosts(
+  storeUrl: string,
+  accessToken: string,
+  inventoryItemIds: number[]
+): Promise<Map<number, string | null>> {
+  const costById = new Map<number, string | null>();
+  const ids = [...new Set(inventoryItemIds)];
+  for (let i = 0; i < ids.length; i += 250) {
+    const batch = ids.slice(i, i + 250);
+    try {
+      const res = await fetch(
+        `https://${storeUrl}/admin/api/2024-10/inventory_items.json?ids=${batch.join(",")}&limit=250`,
+        { headers: { "X-Shopify-Access-Token": accessToken } }
+      );
+      if (!res.ok) continue; // best-effort — cost stays unset for this batch, not a sync failure
+      const data = await res.json();
+      const items: { id: number; cost: string | null }[] = data.inventory_items ?? [];
+      for (const item of items) costById.set(item.id, item.cost ?? null);
+    } catch {
+      // network hiccup on the cost lookup shouldn't fail the whole sync
+    }
+  }
+  return costById;
+}
 
 /**
  * Pulls the tenant's Shopify catalog and upserts it into products/variants.
@@ -36,7 +71,7 @@ export type InventorySyncResult = {
  * they can never drift apart.
  */
 export async function syncShopifyInventory(tenantId: string): Promise<InventorySyncResult> {
-  const empty = { productsCreated: 0, productsUpdated: 0, variantsCreated: 0, duplicateVariants: [], errors: [] };
+  const empty = { productsCreated: 0, productsUpdated: 0, variantsCreated: 0, costsBackfilled: 0, duplicateVariants: [], errors: [] };
 
   const record = await db
     .selectFrom("integrationCredentials")
@@ -79,9 +114,18 @@ export async function syncShopifyInventory(tenantId: string): Promise<InventoryS
     return { ok: false, error: `Could not reach Shopify: ${err instanceof Error ? err.message : String(err)}`, ...empty };
   }
 
+  // Best-effort cost lookup, fetched once up front for every variant in
+  // this catalog (not per-product inside the loop) to keep this to a
+  // handful of requests instead of one per variant. See the "Deliberate
+  // design decision" comment below for why this only ever fills in a
+  // missing cost, never overwrites one EMS already has.
+  const inventoryItemIds = shopifyProducts.flatMap((sp) => sp.variants.map((v) => v.inventory_item_id).filter((id): id is number => id != null));
+  const costByInventoryItemId = await fetchInventoryItemCosts(storeUrl, accessToken, inventoryItemIds);
+
   let created = 0;
   let updated = 0;
   let variantsCreated = 0;
+  let costsBackfilled = 0;
   const errors: string[] = [];
   const duplicateVariants: string[] = [];
 
@@ -156,6 +200,12 @@ export async function syncShopifyInventory(tenantId: string): Promise<InventoryS
         const group = groups.get(svKey);
         const existingVariant = group?.[0];
 
+        // Shopify's InventoryItem.cost is a plain string like "172.00" or
+        // null if the merchant never entered a "Cost per item" value for
+        // this variant in Shopify — treat both "not in the map" and an
+        // explicit null the same way (nothing to backfill from).
+        const shopifyCost = sv.inventory_item_id != null ? costByInventoryItemId.get(sv.inventory_item_id) : null;
+
         if (existingVariant) {
           // Stock is Shopify-governed by choice — every sync overwrites
           // on_hand with Shopify's number. Adjust Stock / delivery-based
@@ -164,6 +214,18 @@ export async function syncShopifyInventory(tenantId: string): Promise<InventoryS
           // resets to Shopify's count, since Shopify is the source of truth.
           // SKU and option casing also get normalized to Shopify's current
           // values here — self-heals the case-mismatch bug.
+          //
+          // Cost is the one deliberate exception to "never touch cost on an
+          // existing variant": if EMS has never had a cost for this variant
+          // (cost_price is null — nobody's entered one, and no prior sync
+          // ever backfilled it), and Shopify now has one, fill it in once.
+          // Once cost_price is non-null here, no future sync ever touches
+          // it again — EMS remains the source of truth from that point on,
+          // matching this page's own "cost, price and profit managed in
+          // EMS" description.
+          const shouldBackfillCost = existingVariant.costPrice == null && shopifyCost != null;
+          if (shouldBackfillCost) costsBackfilled++;
+
           await db
             .updateTable("variants")
             .set({
@@ -172,11 +234,13 @@ export async function syncShopifyInventory(tenantId: string): Promise<InventoryS
               option2Value: sv.option2,
               option3Value: sv.option3,
               onHand: sv.inventory_quantity,
+              ...(shouldBackfillCost ? { costPrice: shopifyCost } : {}),
               updatedAt: new Date(),
             })
             .where("id", "=", existingVariant.id)
             .execute();
         } else {
+          if (shopifyCost != null) costsBackfilled++;
           await db
             .insertInto("variants")
             .values({
@@ -186,7 +250,7 @@ export async function syncShopifyInventory(tenantId: string): Promise<InventoryS
               option2Value: sv.option2,
               option3Value: sv.option3,
               salePrice: sv.price ? sv.price.toString() : null,
-              costPrice: null,
+              costPrice: shopifyCost,
               onHand: sv.inventory_quantity,
             })
             .execute();
@@ -204,5 +268,5 @@ export async function syncShopifyInventory(tenantId: string): Promise<InventoryS
     .where("id", "=", record.id)
     .execute();
 
-  return { ok: true, productsCreated: created, productsUpdated: updated, variantsCreated, duplicateVariants, errors };
+  return { ok: true, productsCreated: created, productsUpdated: updated, variantsCreated, costsBackfilled, duplicateVariants, errors };
 }

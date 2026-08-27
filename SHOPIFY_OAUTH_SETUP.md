@@ -12,10 +12,18 @@ In the "EMS" app (dev.shopify.com/dashboard → your app → Versions), the
 scopes must be exactly:
 
 ```
-read_products,write_products
+read_products,write_products,read_inventory
 ```
 
 Save/create a new version so it's Active.
+
+**If you connected before `read_inventory` was added**: an already-issued
+token only has the scopes it was originally granted — it will NOT pick up
+`read_inventory` on its own. Go to Admin → Shopify Integration and click
+"Connect Shopify" again to re-run the OAuth flow and get a token with the
+new scope. Until you do, inventory sync still works exactly as before, it
+just won't be able to backfill cost (fails silently — see
+`fetchInventoryItemCosts`'s comment in `shopify-inventory-sync.ts`).
 
 ## 2. Set the redirect URL (Dev Dashboard)
 
