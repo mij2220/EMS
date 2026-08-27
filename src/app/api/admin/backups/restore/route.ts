@@ -28,8 +28,8 @@ export async function POST(req: NextRequest) {
     if (!existing) return NextResponse.json({ error: "That backup no longer exists." }, { status: 404 });
     restoreContent = existing.content;
   } else if (file instanceof File) {
-    if (!file.name.toLowerCase().endsWith(".sql")) {
-      return NextResponse.json({ error: "Uploaded file must be a .sql dump (produced by pg_dump)." }, { status: 400 });
+    if (!file.name.toLowerCase().endsWith(".json")) {
+      return NextResponse.json({ error: "Uploaded file must be a .json backup produced by this app's own Create Backup feature." }, { status: 400 });
     }
     restoreContent = Buffer.from(await file.arrayBuffer());
   } else {

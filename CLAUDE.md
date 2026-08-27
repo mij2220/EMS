@@ -375,6 +375,69 @@ before assuming), so new values like `"asset"`, `"vendor_payment"`, `"employee_a
 `"commission"`, `"customer_refund"` are just data, not schema changes. `advance_balance` already
 existed. Deploying this round is pure code — no `db/migrations/` file, no migration prompt needed.
 
+## REAL PRODUCTION INCIDENT #2 — Database Backups feature was completely non-functional (2026-08-26)
+
+**Directly connected to the incident above.** After the voucher-numbering crash, the user attempted
+to reseed the live database and — via a separate, avoidable mistake on my part not repeating an
+earlier warning clearly enough — answered "yes" to the one genuinely destructive prompt in this
+whole toolchain ("Also reseed with fresh demo data? This WIPES the live database's current data.").
+The reseed then crashed on a missing `JWT_SECRET` before it could even repopulate demo data,
+leaving the live tenant/users/orders/vouchers/everything gone. The user tried the in-app
+`Admin → Database Backups` feature as the last hope for recovery and found it completely broken:
+`Could not start pg_dump: spawn pg_dump ENOENT`.
+
+**Root cause**: the feature (built by a different tool, not documented anywhere in this file
+before now — see the earlier note about that gap) worked by shelling out to the `pg_dump` and
+`psql` command-line programs via Node's `child_process.spawn`. Those programs are Postgres's own
+client tools — they exist in the **Postgres service's** container, but are NOT guaranteed to exist
+in the **app's own** container, which is a separate environment. A `nixpacks.toml` in the repo
+attempted to install them during build, but clearly wasn't reliably landing in the running
+container. This is exactly why a fresh, working `pg_dump`-independent Postgres backup would have
+made this whole incident a non-event — and instead, it didn't work at all.
+
+**The real fix**: removed the `pg_dump`/`psql` binary dependency entirely. `src/lib/db-backup.ts`
+now builds backups using plain SQL through the app's own existing database connection — reads
+every real table via `information_schema`, serializes rows to JSON (binary/`bytea` columns get
+base64-encoded, restored back to real `Buffer`s on the way in), and restores by truncating and
+re-inserting inside a single transaction. This cannot fail with "binary not found" regardless of
+what Railway's build environment does, because it doesn't depend on any external program existing
+at all. Backup file format changed from `.sql` to `.json` accordingly — both the download route's
+filename/content-type and the restore-from-upload validation were updated to match.
+
+**Three real bugs this caught before it ever reached the user again — found by actually running
+the full backup → wipe → restore cycle locally, not by reasoning about the code:**
+
+1. `information_schema`'s `table_name` column comes back as `tableName` through the app's
+   `CamelCasePlugin` — the first version silently read `undefined` for every table name and the
+   dump function crashed immediately on the very first real attempt.
+2. Restoring in arbitrary table order violated foreign-key constraints (e.g. `vouchers` inserted
+   before the `accounts` its `debit_account_id` points to). Fixed with a genuine topological sort
+   computed from the database's own real FK graph (queried from `information_schema`), not a
+   hardcoded table order that could silently go stale as the schema evolves.
+3. **The most serious one**: `db_backups.created_by_user_id` references `users`, and `users` is
+   one of the tables being truncated during a restore. Postgres's `TRUNCATE ... CASCADE`
+   automatically also wipes any OTHER table with a foreign key into a truncated table — so without
+   a fix, every restore silently destroyed the entire backup history, **including the pre-restore
+   safety snapshot taken moments earlier as part of that same restore** — defeating the one
+   safety mechanism this whole feature exists to provide. Fixed by reading existing `db_backups`
+   rows out before the truncate and re-inserting them after the restored data (including the
+   restored `users`) is back in place.
+
+**Verified for real, end-to-end, more than once**: created real test data including an actual
+photo (bytea) and a real encrypted Shopify credential (bytea) — the two trickiest column types to
+round-trip correctly through JSON — ran a real backup via the actual HTTP API, wiped the database
+completely (`TRUNCATE tenants CASCADE`, the exact same operation that caused the original
+incident), restored from that backup, and confirmed **byte-for-byte MD5 match** on both binary
+columns plus exact row counts across vouchers/products/variants/customers. Also confirmed backup
+history genuinely survives a restore afterward (both the original backup and the new pre-restore
+snapshot present, correctly labeled) — this was the specific thing bug #3 above broke, so it was
+checked explicitly rather than assumed fixed once code was written.
+
+**What this does NOT cover, so it isn't overclaimed**: this only protects going forward — it does
+nothing for the data already lost in the incident above, and Railway's own automatic backups
+(if the account is ever upgraded to a plan that has them) remain a separate, complementary layer
+worth having in addition to this, not instead of it.
+
 ## REAL PRODUCTION INCIDENT — voucher numbering race condition (2026-08-26)
 
 **What broke, for real, on the live client's database**: `Add Expense` failed with "Could not

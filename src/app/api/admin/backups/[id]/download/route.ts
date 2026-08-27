@@ -12,10 +12,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const backup = await db.selectFrom("dbBackups").select(["content", "createdAt"]).where("id", "=", id).executeTakeFirst();
   if (!backup) return NextResponse.json({ error: "Backup not found." }, { status: 404 });
 
-  const filename = `ems-backup-${new Date(backup.createdAt).toISOString().slice(0, 19).replace(/[:T]/g, "-")}.sql`;
+  const filename = `ems-backup-${new Date(backup.createdAt).toISOString().slice(0, 19).replace(/[:T]/g, "-")}.json`;
   return new NextResponse(new Uint8Array(backup.content), {
     headers: {
-      "Content-Type": "application/sql",
+      "Content-Type": "application/json",
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });

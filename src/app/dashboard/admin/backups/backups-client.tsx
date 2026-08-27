@@ -191,7 +191,7 @@ export default function BackupsClient({ tenantName, userInitial }: { tenantName:
       <div className="mockup-card mb-6">
         <input
           type="file"
-          accept=".sql"
+          accept=".json"
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) {
@@ -203,7 +203,7 @@ export default function BackupsClient({ tenantName, userInitial }: { tenantName:
           className="text-sm"
         />
         <p className="text-sm mt-2" style={{ color: "var(--muted)" }}>
-          Must be a .sql dump produced by pg_dump — such as one downloaded from this page.
+          Must be a .json backup produced by this app&apos;s own Create Backup feature — such as one downloaded from this page.
         </p>
       </div>
 
